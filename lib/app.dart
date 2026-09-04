@@ -10,12 +10,8 @@ class RecurApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
       home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Recur'),
-        ),
-        body: const Center(
-          child: Text('No events yet.'),
-        ),
+        appBar: AppBar(title: const Text('Recur')),
+        body: const Center(child: Text('No events yet.')),
       ),
     );
   }
