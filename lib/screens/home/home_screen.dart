@@ -9,6 +9,7 @@ import '../../data/models/event_type.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/recur_fab.dart';
+import '../booking/booking_screen.dart';
 import '../booking/calendar_picker_sheet.dart';
 import '../editor/editor_screen.dart';
 
@@ -85,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openBooking(String eventTypeId) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (context) => _BookingPlaceholder(eventTypeId: eventTypeId),
+        builder: (context) => BookingScreen(eventTypeId: eventTypeId),
       ),
     );
     await _reload();
@@ -194,22 +195,6 @@ class _HomeBody extends StatelessWidget {
           onLongPress: () => onOpenEditor(card.eventType.id),
         );
       },
-    );
-  }
-}
-
-/// Stands in for the real Booking screen until it lands.
-class _BookingPlaceholder extends StatelessWidget {
-  const _BookingPlaceholder({required this.eventTypeId});
-
-  final String eventTypeId;
-
-  @override
-  Widget build(BuildContext context) {
-    // TODO(#22): replace with the real BookingScreen.
-    return Scaffold(
-      appBar: AppBar(title: const Text('Booking')),
-      body: const Center(child: Text('Booking placeholder')),
     );
   }
 }

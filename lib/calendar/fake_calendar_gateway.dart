@@ -75,6 +75,9 @@ class FakeCalendarGateway implements CalendarGateway {
   /// entry in [created].
   final List<BusyInterval> busy = [];
 
+  /// Every `(from, to)` pair [busyIntervals] was called with, in order.
+  final List<({DateTime from, DateTime to})> busyQueries = [];
+
   /// Every [createEvent] call that succeeded, in order.
   final List<CreatedEvent> created = [];
 
@@ -112,6 +115,8 @@ class FakeCalendarGateway implements CalendarGateway {
     if (access != CalendarAccess.granted) {
       throw StateError('busyIntervals requires access == granted.');
     }
+
+    busyQueries.add((from: from, to: to));
 
     final all = [
       ...busy,
