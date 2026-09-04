@@ -128,9 +128,14 @@ Anatomy, top to bottom, 16 px inner padding:
 4. Flexible space, then the last-booked line in `RecurText.caption`,
    `muted`, 1 line. Text per `formatLastBooked` in the architecture doc.
 
-Constructor: `EventCard({required EventType eventType, required Booking?
-latestBooking, required DateTime now, required CardColumn column, required
-VoidCallback onTap, required VoidCallback onLongPress})`.
+Constructor: `EventCard({required String name, required int
+durationMinutes, String? location, required String lastBookedText, required
+bool lastBookedIsFuture, required CardColumn column, required VoidCallback
+onTap, required VoidCallback onLongPress})`. `CardColumn { one, two }` lives
+in the same file. The widget takes plain values so it does not depend on the
+data layer; the Home screen formats `lastBookedText` with
+`formatLastBooked` and sets `lastBookedIsFuture` when the latest booking
+starts after now.
 
 | State | Look |
 | --- | --- |
@@ -171,9 +176,11 @@ stacked: weekday abbreviation (`RecurText.caption`) over the day number
 (`RecurText.label`). A 6 px dot 4 px under the number when
 `hasSuggestions` is true.
 
-Constructor: `DayPill({required LocalDate date, required bool selected,
-required bool enabled, required bool hasSuggestions, required bool isToday,
-VoidCallback? onTap})`.
+Constructor: `DayPill({required String weekdayLabel, required int dayNumber,
+required bool selected, required bool enabled, required bool hasSuggestions,
+required bool isToday, VoidCallback? onTap})`. `weekdayLabel` is `Mon` ..
+`Sun`. Plain values only, so the widget does not depend on `core` or the
+suggestion engine.
 
 | State | Fill | Text | Dot |
 | --- | --- | --- | --- |
@@ -196,9 +203,14 @@ not touch. Radius `slot`. Left content: the start time in
 `RecurText.label`. Right content (blocked only): the reason text in
 `RecurText.caption`, `muted`, 1 line, ellipsis.
 
-Constructor: `SlotTile({required Slot slot, required bool selected,
-VoidCallback? onTap})`. The tile derives its visual state from
-`slot.state`, `slot.blockReason`, `slot.blockingTitle`, and `selected`.
+Constructor: `SlotTile({required String timeLabel, required
+SlotTileAppearance appearance, String? reasonText, VoidCallback? onTap})`.
+`enum SlotTileAppearance { available, highlighted, selected, blocked }` lives
+in the same file. The Booking screen maps a `Slot` to these: `blocked` when
+`slot.state == SlotState.blocked` (with `reasonText` = `slot.blockingTitle ??
+'Busy'` for conflicts, `Past`, or `Outside hours`), `selected` when the slot
+is the selected one, else `highlighted` or `available` from `slot.state`.
+Plain values only, so the widget does not depend on the suggestion engine.
 
 | State | Fill | Left border | Text | Right text |
 | --- | --- | --- | --- | --- |
