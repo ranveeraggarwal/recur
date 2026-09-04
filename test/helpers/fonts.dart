@@ -26,5 +26,13 @@ Future<void> loadAppFonts() async {
     loader.addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
   }
   await loader.load();
+
+  // `uses-material-design: true` in pubspec.yaml bundles this font into the
+  // test asset manifest, so RecurFab's Icons.add renders as a real glyph in
+  // goldens instead of the test-font tofu box.
+  final iconLoader = FontLoader('MaterialIcons');
+  iconLoader.addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+  await iconLoader.load();
+
   _loaded = true;
 }
