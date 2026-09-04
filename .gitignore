@@ -59,3 +59,6 @@ app.*.map.json
 *.g.dart
 *.freezed.dart
 *.mocks.dart
+
+# Claude Code agent worktrees (transient scratch checkouts, never committed)
+.claude/worktrees/
