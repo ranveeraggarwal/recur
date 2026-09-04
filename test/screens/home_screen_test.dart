@@ -154,7 +154,7 @@ void main() {
     expect(find.byIcon(Icons.calendar_today_outlined), findsOneWidget);
   });
 
-  testWidgets('the FAB navigates to the Editor placeholder', (
+  testWidgets('the FAB navigates to the Editor for a new card', (
     WidgetTester tester,
   ) async {
     final testDeps = buildTestDeps();
@@ -163,7 +163,7 @@ void main() {
     await tester.tap(find.byType(RecurFab));
     await tester.pumpAndSettle();
 
-    expect(find.text('Editor'), findsOneWidget);
+    expect(find.text('New event'), findsOneWidget);
   });
 
   testWidgets(
@@ -184,7 +184,8 @@ void main() {
 
       await tester.longPress(find.byType(EventCard));
       await tester.pumpAndSettle();
-      expect(find.text('Editor'), findsOneWidget);
+      expect(find.text('Edit event'), findsOneWidget);
+      expect(find.text('PT session'), findsWidgets);
     },
   );
 

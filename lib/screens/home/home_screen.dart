@@ -10,6 +10,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/recur_fab.dart';
 import '../booking/calendar_picker_sheet.dart';
+import '../editor/editor_screen.dart';
 
 /// The app's landing screen: a two-column grid of cards, one per event
 /// type, or an empty state when there are none.
@@ -73,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openEditor(String? eventTypeId) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (context) => _EditorPlaceholder(eventTypeId: eventTypeId),
+        builder: (context) => EditorScreen(eventTypeId: eventTypeId),
       ),
     );
     if (changed == true) {
@@ -193,22 +194,6 @@ class _HomeBody extends StatelessWidget {
           onLongPress: () => onOpenEditor(card.eventType.id),
         );
       },
-    );
-  }
-}
-
-/// Stands in for the real Editor screen until it lands.
-class _EditorPlaceholder extends StatelessWidget {
-  const _EditorPlaceholder({this.eventTypeId});
-
-  final String? eventTypeId;
-
-  @override
-  Widget build(BuildContext context) {
-    // TODO(#21): replace with the real EditorScreen.
-    return Scaffold(
-      appBar: AppBar(title: const Text('Editor')),
-      body: const Center(child: Text('Editor placeholder')),
     );
   }
 }
