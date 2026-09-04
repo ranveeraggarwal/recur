@@ -177,7 +177,8 @@ void main() {
 
       await tester.tap(find.byType(EventCard));
       await tester.pumpAndSettle();
-      expect(find.text('Booking'), findsOneWidget);
+      expect(find.text('PT session'), findsWidgets);
+      expect(find.text('Pick a slot'), findsOneWidget);
 
       await tester.pageBack();
       await tester.pumpAndSettle();
