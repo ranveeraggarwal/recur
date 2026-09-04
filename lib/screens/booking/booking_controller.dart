@@ -175,11 +175,57 @@ class BookingController extends ChangeNotifier {
     return null;
   }
 
+  /// The number of writable calendars, so the screen knows when it must
+  /// send the user to the calendar picker before a first confirm.
+  int get writableCalendarCount => _writableCalendars.length;
+
+  /// Re-reads the stored calendar choice. Called by the screen after the
+  /// calendar picker sheet closes, so [calendarIdToUse] reflects a change
+  /// made there without waiting for another [init].
+  Future<void> refreshSettings() async {
+    _settings = await _deps.settings.get();
+    notifyListeners();
+  }
+
   /// Writes the calendar event, then logs the booking. See
   /// `docs/architecture.md`'s "BookingController" section for the ordering
-  /// and error-handling contract.
+  /// and error-handling contract: if the calendar write throws, nothing is
+  /// logged and the exception propagates; if the booking log then fails,
+  /// the calendar event is left in place (never deleted) and the exception
+  /// still propagates.
   Future<Booking> confirm({required String calendarId}) async {
-    // TODO(#23): calendar.createEvent(...) then bookings.add(...).
-    throw UnimplementedError('confirm() lands in #23.');
+    final slot = selectedSlot;
+    if (slot == null) {
+      throw StateError('confirm() requires a selected slot.');
+    }
+
+    isConfirming = true;
+    notifyListeners();
+    try {
+      final end = slot.date.at(slot.endMinutes);
+      final calendarEventId = await _deps.calendar.createEvent(
+        calendarId: calendarId,
+        title: eventType.name,
+        start: slot.start,
+        end: end,
+        location: eventType.location,
+        notes: eventType.notes,
+      );
+
+      final booking = Booking(
+        id: _deps.ids.next(),
+        eventTypeId: eventType.id,
+        start: slot.start,
+        end: end,
+        calendarId: calendarId,
+        calendarEventId: calendarEventId,
+        createdAt: _deps.clock.now(),
+      );
+      await _deps.bookings.add(booking);
+      return booking;
+    } finally {
+      isConfirming = false;
+      notifyListeners();
+    }
   }
 }
