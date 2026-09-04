@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'screens/home/home_screen.dart';
 import 'theme/app_theme.dart';
 
 class RecurApp extends StatelessWidget {
@@ -11,10 +12,7 @@ class RecurApp extends StatelessWidget {
       title: 'Recur',
       debugShowCheckedModeBanner: false,
       theme: buildRecurTheme(),
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Recur')),
-        body: const Center(child: Text('No events yet.')),
-      ),
+      home: const HomeScreen(),
     );
   }
 }
