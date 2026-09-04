@@ -1,98 +1,80 @@
 # Recur
 
-Recur is an Android app for booking appointments you rebook every few weeks
-at slightly different times: physio, a trainer, a haircut. You describe each
-appointment once. When it is time to rebook, Recur shows a week of your
-calendar, highlights the good slots, and writes the one you pick into your
-phone calendar.
+Some appointments never land on a fixed schedule. Physio every three weeks
+or so. The trainer when your legs have recovered. A haircut when it starts
+to look like a haircut is due. Each time you rebook, you open the calendar
+app, scroll around, and try to remember what worked last time.
 
-Package `com.ranveeraggarwal.recur`. Android only, minSdk 24, targetSdk 35.
+Recur remembers for you.
 
-## What it does
+## The idea in one breath
 
-- You keep a list of **cards**. A card is one kind of appointment: name,
-  duration, location, notes, preferred weekdays, preferred time window.
-- Tap a card and you get a **week view**. Slots that clash with your calendar
-  are blocked. Slots that fit your preference, or your recent pattern, are
-  highlighted.
-- Tap a slot, tap Confirm, and Recur writes **one calendar event** and
-  remembers the booking.
+You make a card for each appointment. When it is time to rebook, you tap
+the card, see a week of your real calendar with the good slots lit up, tap
+one, tap Confirm. Recur writes the event to your phone calendar and notes
+that you booked it. Next time, the suggestions are a little smarter.
 
-## What it does not do
+That is the whole app. Android only. Everything stays on the phone.
 
-No accounts, no cloud, no notifications. It never edits or deletes calendar
-events. No recurring events. No machine learning. No settings screen except
-one calendar picker. No iOS, web, or dark theme.
+## What it will never do
 
-## Screens
+No accounts. No cloud. No notifications. It never edits or deletes anything
+in your calendar, it only adds. No recurring events, no machine learning,
+no settings screen, no dark mode. If a feature is not on this page, it is
+not in the app.
 
-**Home.** A two-column grid of cards and a plus button. Each card shows the
-name, a duration pill (`45 min`), the location, and a line like
-`Last booked 3 weeks ago`, `Booked for Tue 8 Sep`, or `Not booked yet`.
-Tap a card to book. Long-press to edit. With nothing added the screen says
-`No events yet.` and under it `Tap + to add one.` If the phone has two or
-more writable calendars, a calendar icon in the app bar opens the picker.
+## The four screens
 
-**Editor.** A form: name, duration pills (`30 min`, `45 min`, `60 min`,
-`90 min`, `Custom`), location, notes, weekday pills, and a start and end
-time in 30-minute steps between 06:00 and 22:00. Defaults: 60 min, Mon to
-Fri, 08:00 to 18:00. `Save` is disabled until the form is valid. Errors:
-`Name is required.` and `End must be after start plus the duration.`
-Existing cards get `Delete event type`, which asks
-`Delete "PT session"? Past bookings are removed from Recur. Calendar events
-are not touched.`
+**Home** is a grid of cards, two across, with a plus button in the corner.
+A card shows the name, how long it takes, where it is, and a line like
+`Last booked 3 weeks ago` or `Booked for Tue 8 Sep`. Tap to book, hold to
+edit. An empty Home says `No events yet.` and, quietly, `Tap + to add one.`
 
-**Booking.** The card name in the app bar. A week header (`Week of 7 Sep`)
-with back and forward chevrons. A strip of seven day pills, past days
-disabled, a small dot on days that have suggestions. Below it a timeline of
-30-minute slots from 06:00 to 22:00. Blocked slots say why: the event's
-title, `Busy`, `Past`, or `Outside hours`. Tap a slot to select it. A bar
-at the bottom shows `Pick a slot` or `Tue 8 Sep, 10:00 to 11:00` and the
-`Confirm` button.
+**Editor** is a plain form: name, duration (`30 min`, `45 min`, `60 min`,
+`90 min`, or `Custom`), location, notes, which weekdays suit you, and a
+time window between 06:00 and 22:00. Defaults are 60 minutes, Monday to
+Friday, 08:00 to 18:00. Save stays grey until the form makes sense. Delete
+warns you: `Delete "PT session"? Past bookings are removed from Recur.
+Calendar events are not touched.`
 
-If calendar access is missing the timeline is replaced by one of:
+**Booking** is the week view. Seven day pills across the top, a timeline of
+30-minute slots down the page from 06:00 to 22:00, and a Confirm bar
+stuck to the bottom. Busy slots are greyed out and tell you why: the event
+name, `Busy`, `Past`, or `Outside hours`. Good slots have a warm cedar edge.
+Tap one and the bar reads `Tue 8 Sep, 10:00 to 11:00`.
 
-- `Recur needs calendar access to show your week.` with `Allow calendar access`
-- `Calendar access is off for Recur.` with `Open settings`
-- `No writable calendar found.` with no button
+If Recur cannot see the calendar yet, the timeline gives way to a short
+message and one button: `Allow calendar access`, or `Open settings` if the
+phone has locked it out. If there is no calendar it can write to, it says
+so and offers nothing else.
 
-If there are two or more writable calendars and none is chosen, Confirm
-opens the picker first. If the write fails: snack bar
-`Couldn't add to calendar.`
+**Confirmation** is a small sheet that slides up, says `Booked`, shows the
+slot, and slides away two seconds later, leaving you on Home.
 
-**Confirmation.** A bottom sheet: a green check, `Booked`, the slot
-summary, the card name. It closes by itself after two seconds and you land
-on Home.
+There is one extra sheet, `Write bookings to`, that lists your calendars.
+You only ever see it if the phone has more than one calendar Recur could
+write to.
 
-**Calendar picker.** A bottom sheet titled `Write bookings to` with one row
-per writable calendar. Tap to choose.
+## How it picks the good slots
 
-## How slots are chosen
+Two simple rules, no cleverness.
 
-A slot is a 30-minute start time. Booking it creates an event of the card's
-duration.
+A slot is **blocked** if it is already in the past, if the appointment
+would overlap anything in any of your calendars, or if it would run past
+22:00. Blocked always wins.
 
-**Blocked** (always wins):
+A slot is **highlighted** if it sits inside a window. Until you have
+booked a card three times, the window is what you typed into the Editor.
+After that, Recur looks at your last three bookings: the weekday you use
+most (ties keep both), and the earliest start to the latest finish, with
+half an hour of slack on each side. The whole appointment has to fit inside
+the window to light up.
 
-- the slot start is not after now
-- the appointment would overlap any event in any calendar
-- the appointment would end after 22:00
+All-day events and events marked "free" do not block. An event that ends at
+10:00 does not block a slot that starts at 10:00.
 
-**Highlighted** comes from a window (weekdays plus a start and end time):
+## How it talks
 
-- Fewer than 3 past bookings: the window is the card's preference.
-- Otherwise take the last 3 past bookings. Weekdays: the most common one
-  (ties keep all). Time: earliest start to latest end, padded 30 minutes each
-  side, clamped to 06:00 to 22:00.
-- A slot is highlighted only if the whole appointment fits inside the
-  window.
-
-Conflicts come from every calendar, with recurring events expanded. All-day
-events and events marked free do not block. An event ending at 10:00 does
-not block a slot starting at 10:00.
-
-## Copy
-
-Plain words. `PT session`, `Confirm`, `Booked`, `No events yet.` Never
-"flow", "ritual", or "breathe". Never all-caps. Times `10:00`, dates
-`Tue 8 Sep`, durations `45 min`.
+Short words. `PT session`, `Confirm`, `Booked`. Times look like `10:00`,
+dates like `Tue 8 Sep`, durations like `45 min`. It never says "flow",
+"ritual", or "breathe", and it never shouts in capitals.

@@ -1,13 +1,14 @@
-# Architecture
+# How Recur is built
 
-How Recur is built. Open choices are settled in the table at the end.
+A small app deserves a small architecture. Here is the whole thing.
 
-## Toolchain
+## The tools
 
-Flutter 3.47.2 stable (Dart 3.13.2). Android minSdk 24, targetSdk 35.
-Java 17 for Gradle. Calendar plugin `device_calendar_plus` ^0.8.0.
+Flutter 3.47.2 (Dart 3.13.2), Android only, minSdk 24, targetSdk 35. One
+plugin for the calendar, `device_calendar_plus` 0.8.0, and `path_provider`
+for a folder to save files in. That is the full dependency list.
 
-Checks that must pass before any push:
+Before you push anything:
 
 ```sh
 dart format --output=none --set-exit-if-changed lib test
@@ -16,222 +17,107 @@ TZ=Europe/Stockholm flutter test
 flutter build apk --debug
 ```
 
-## Layout
+## The shape
 
 ```
 lib/
-  main.dart            builds the real dependencies
-  app.dart             RecurApp (MaterialApp + theme)
-  app_scope.dart       AppScope InheritedWidget holding AppDependencies
-  core/                Clock, IdGenerator, LocalDate, minutes helpers, formatting
-  data/                models + LocalStore + repositories
-  calendar/            CalendarGateway, FakeCalendarGateway, DeviceCalendarGateway
-  suggestions/         suggestionWindowFor, buildSlotGrid
-  theme/               tokens.dart, app_theme.dart
-  widgets/             EventCard, DurationPill, DayPill, SlotTile, ConfirmButton, RecurTextField, RecurFab
-  screens/             home/, editor/, booking/
-test/                  mirrors lib/; helpers/ and goldens/
-assets/fonts/          Outfit 400/500/600 + OFL.txt
+  core/          dates, clocks, ids, and the little text formatters
+  data/          the three models and where they are saved
+  calendar/      the gateway to the phone calendar, a fake, and the real one
+  suggestions/   the slot logic
+  theme/         every colour, size, and font, in one file
+  widgets/       cards, pills, tiles, buttons
+  screens/       home, editor, booking
 ```
 
-Only `calendar/device_calendar_gateway.dart` imports the plugin. Every
-screen and every test uses `FakeCalendarGateway`.
+Three ideas hold it together.
 
-Dependencies allowed: `device_calendar_plus`, `path_provider`, and
-`flutter_lints`. Nothing else.
+**One door to the calendar.** Everything that touches the phone calendar
+goes through a small interface called `CalendarGateway`. It can check and
+ask for permission, list calendars you can write to, fetch busy times, and
+create one event. There is a fake version that lives in memory, and every
+screen and every test uses the fake. Only one file in the whole app,
+`device_calendar_gateway.dart`, knows the plugin exists.
 
-## Time
+**Wall-clock time, always.** An appointment is "Tuesday at ten", not an
+instant on a global timeline. So Recur stores and shows local times, and it
+counts times of day in minutes since midnight (06:00 is 360, 22:00 is
+1320). A tiny `LocalDate` type turns a date plus minutes into a `DateTime`.
+Nothing adds hours to midnight to find a slot; on the day the clocks change
+that would be an hour off. Tests that care run in the Stockholm zone.
 
-Everything is local wall-clock time. Minutes since midnight are the unit for
-times of day: 06:00 is 360, 22:00 is 1320, a slot is 30.
+**Files, not a database.** The app has three things to remember: the cards,
+the bookings, and which calendar you chose. Each is a small JSON file in
+the app's folder, written to a temp name and renamed so a crash cannot leave
+a half-written file. Three repositories read and write them, one per thing.
+Tests swap in an in-memory store.
 
-```dart
-class LocalDate {            // a date with no time or zone
-  int year, month, day;
-  int get weekday;           // 1 Monday .. 7 Sunday
-  LocalDate addDays(int n);
-  LocalDate get mondayOfWeek;
-  DateTime at(int minutes) => DateTime(year, month, day, minutes ~/ 60, minutes % 60);
-}
-```
+## The data
 
-Slot times always come from `LocalDate.at`. Never add a `Duration` to
-midnight to reach a time of day; on a DST day that is an hour off. Tests
-that care run with `TZ=Europe/Stockholm` and skip themselves elsewhere.
+A **card** (`EventType`) has a name, a duration in minutes, an optional
+location and notes, the weekdays you prefer, and a start and end time.
 
-Also in `core/`: `Clock` (`SystemClock`, `FixedClock`), `IdGenerator`
-(`UuidLikeIdGenerator`, `SequentialIdGenerator`), and `formatting.dart`
-with hand-written English: `45 min`, `10:00`, `Tue 8 Sep`, `Week of 7 Sep`,
-`Tue 8 Sep, 10:00 to 11:00`, `Last booked 3 weeks ago`, `Booked for Tue 8
-Sep`, `Not booked yet`.
+A **booking** has the card it belongs to, a start and end, and the id of
+the calendar and event it was written to. Bookings are never edited; they
+disappear only when their card is deleted.
 
-## Data
+**Settings** is one optional string: the chosen calendar id.
 
-```dart
-class EventType {
-  String id, name;                 // name 1..40 chars
-  int durationMinutes;             // 5..480, step 5
-  String? location, notes;         // <= 80 / <= 500 chars
-  Set<int> preferredWeekdays;      // 1..7, not empty
-  int preferredStartMinutes;       // 360..1320, step 30
-  int preferredEndMinutes;         // >= start + duration, <= 1320
-  DateTime createdAt;
-}
+## The slot logic
 
-class Booking {
-  String id, eventTypeId, calendarId, calendarEventId;
-  DateTime start, end, createdAt;
-}
+Two pure functions, no side effects, easy to test.
 
-class AppSettings { String? selectedCalendarId; }
-```
+`suggestionWindowFor` takes a card and its bookings and returns a window:
+a set of weekdays plus a start and end time. Fewer than three past
+bookings, it hands back the card's preference. Otherwise it takes the three
+most recent, picks the most common weekday (ties keep all), spans the
+earliest start to the latest end, pads by 30 minutes, and clamps to 06:00
+to 22:00.
 
-Stored as JSON files, one per key (`event_types`, `bookings`, `settings`),
-under the app documents directory. Writes go to a temp file then rename.
-`DateTime` is written with `toIso8601String()` (local, no `Z`).
+`buildSlotGrid` takes a date, a duration, a window, the busy times, and
+"now", and returns the 32 slots of that day. Each slot is past, outside
+hours, a conflict, highlighted, or available, checked in exactly that
+order.
 
-```dart
-abstract interface class LocalStore {
-  Future<String?> read(String key);
-  Future<void> write(String key, String json);
-  Future<void> delete(String key);
-}
-// InMemoryLocalStore for tests, JsonFileLocalStore(Directory) for the app.
+## The screens
 
-abstract interface class EventTypeRepository {
-  Future<List<EventType>> getAll();            // by createdAt
-  Future<EventType?> getById(String id);
-  Future<void> upsert(EventType e);
-  Future<void> delete(String id);
-}
-abstract interface class BookingRepository {
-  Future<List<Booking>> getForEventType(String id);   // newest first
-  Future<Booking?> latestForEventType(String id);
-  Future<void> add(Booking b);
-  Future<void> deleteForEventType(String id);
-}
-abstract interface class SettingsRepository {
-  Future<AppSettings> get();
-  Future<void> save(AppSettings s);
-}
-```
+Dependencies are bundled into one object and handed down the widget tree
+with an `InheritedWidget` called `AppScope`. Screens navigate with plain
+`Navigator.push`. Each screen has its own small controller (a
+`ChangeNotifier`). No state-management library, no router library.
 
-## Calendar
+When you confirm, the Booking controller writes the calendar event first
+and logs the booking second. If the write fails, nothing is logged and you
+see `Couldn't add to calendar.` The calendar it writes to is the one you
+chose, or the only writable one, or it asks.
 
-```dart
-enum CalendarAccess { granted, notDetermined, denied }   // denied = only settings can fix it
-
-class CalendarInfo { String id, name; String? accountName; bool isPrimary; }
-class BusyInterval { DateTime start, end; String? title; }   // half-open [start, end)
-
-abstract interface class CalendarGateway {
-  Future<CalendarAccess> checkAccess();
-  Future<CalendarAccess> requestAccess();
-  Future<void> openSystemSettings();
-  Future<List<CalendarInfo>> listWritableCalendars();
-  Future<List<BusyInterval>> busyIntervals({required DateTime from, required DateTime to});
-  Future<String> createEvent({required String calendarId, required String title,
-      required DateTime start, required DateTime end, String? location, String? notes});
-}
-class CalendarWriteException implements Exception { String message; Object? cause; }
-```
-
-`busyIntervals` reads every calendar, expands recurring events, and drops
-all-day and free events.
-
-`FakeCalendarGateway` has public fields tests can set: `access`,
-`accessAfterRequest`, `calendars`, `busy`, `created`, `failNextCreateWith`,
-plus counters `requestAccessCalls` and `openSystemSettingsCalls`. Created
-events show up as busy afterwards. Event ids are `evt-1`, `evt-2`, ...
-
-`DeviceCalendarGateway` maps to the plugin: `hasPermissions` and
-`requestPermissions(level: full)` (granted -> granted; notDetermined or
-writeOnly -> notDetermined; denied or restricted -> denied),
-`openAppSettings`, `listCalendars` minus read-only and hidden,
-`listEvents(from, to)` minus all-day and free, and `createEvent` with
-`description: notes`. Plugin errors become `CalendarWriteException`. The
-manifest needs `READ_CALENDAR` and `WRITE_CALENDAR`.
-
-## Suggestions
-
-```dart
-class SuggestionWindow { Set<int> weekdays; int startMinutes, endMinutes; }
-
-SuggestionWindow suggestionWindowFor({required EventType eventType,
-    required List<Booking> bookings, required DateTime now});
-```
-
-Past bookings are those with `start < now`. Fewer than 3: use the card's
-preference. Otherwise take the 3 most recent by start. Weekdays: the most
-common, ties keep all. Window: earliest start to latest end (an end past
-midnight counts as 24:00), padded 30 minutes each side, clamped 360..1320.
-A window too small for the duration is kept as is.
-
-```dart
-enum SlotState { available, highlighted, blocked }
-enum BlockReason { past, conflict, outsideHours }
-
-class Slot {
-  LocalDate date; int startMinutes, endMinutes;
-  SlotState state; BlockReason? blockReason; String? blockingTitle;
-  DateTime get start => date.at(startMinutes);
-}
-
-List<Slot> buildSlotGrid({required LocalDate date, required int durationMinutes,
-    required SuggestionWindow window, required List<BusyInterval> busy, required DateTime now});
-```
-
-32 slots, 360 to 1290 in steps of 30. Precedence: past (start not after
-now), outside hours (end after 1320), conflict (overlaps a busy interval;
-title of the earliest one), highlighted (weekday in window and the whole
-appointment inside it), else available.
-
-## Screens
-
-`AppDependencies` holds `clock`, `ids`, `eventTypes`, `bookings`,
-`settings`, `calendar`. `AppScope.of(context)` returns it. `main.dart`
-builds the real set; `flutter run --dart-define=USE_FAKE_CALENDAR=true`
-swaps in the fake.
-
-Navigation is `Navigator.push`. Each screen owns a `ChangeNotifier`
-controller. No global state, no packages for it.
-
-`BookingController` loads access, calendars, and bookings, then builds one
-slot grid per day of the shown week. `confirm` writes the calendar event
-first and logs the booking second. If the write throws, nothing is logged
-and the screen shows the snack bar. The event's title, location, and notes
-come from the card; `end` is `date.at(endMinutes)`.
-
-The calendar to write to is the stored one if it is still writable, else
-the only writable one, else none (the picker opens).
+Run the app against the fake calendar with
+`flutter run --dart-define=USE_FAKE_CALENDAR=true`.
 
 ## Tests
 
-Unit tests for `core`, `data`, `suggestions`, and the adapter's mapping
-functions. Widget and golden tests for everything visual, always against
-the fakes. Goldens are 380 px wide at DPR 1 with Outfit loaded, generated
-on Linux (`flutter test --update-goldens`), stored in `test/goldens/`.
-Helpers live in `test/helpers/` (`golden.dart`, `fonts.dart`, `fakes.dart`).
+Unit tests for the logic, widget tests for the screens, and golden images
+for every visual state, taken at 380 px wide with the Outfit font loaded.
+Goldens are generated on Linux, which is what CI runs. Nothing in the test
+suite touches the real plugin.
 
-## Decisions
+## Decisions we made so nobody has to make them again
 
-| # | Decision |
+| | |
 | --- | --- |
-| D1 | No state-management or router package. |
-| D2 | JSON files via `path_provider`, atomic rename on write. |
-| D3 | Local wall-clock everywhere; slot maths through `LocalDate.at`. |
-| D4 | "Past bookings" means `start < now`; take the 3 most recent by start. |
-| D5 | Weekday ties keep all; pad 30 min; clamp 06:00 to 22:00; small windows kept. |
-| D6 | Precedence past, outside hours, conflict, highlighted, available. Appointments ending after 22:00 are blocked. |
-| D7 | Conflicts from all calendars; all-day and free events never block; half-open overlap. |
-| D8 | Only `createEvent` on the plugin. Never update or delete. |
-| D9 | Stored calendar id used if still writable; a single writable calendar is used without asking. |
-| D10 | Deleting a card deletes its local bookings and never touches the calendar. |
-| D11 | Goldens at 380 px, DPR 1, Outfit, generated on Linux. |
-| D12 | Hand-written English formatting, no `intl`. |
-| D13 | Ids are 32 hex chars from `Random.secure()`. |
-| D14 | Flutter pinned to 3.47.2 in CI. |
-| D15 | Confirm writes the event, then logs the booking. A failed log after a successful write is accepted. |
-| D16 | `USE_FAKE_CALENDAR` dart-define swaps in the fake. |
-| D17 | Weeks are Monday to Sunday; cannot go before the current week. |
-| D18 | Duration pills 30/45/60/90 plus Custom (5 to 480, step 5). Defaults 60, Mon to Fri, 08:00 to 18:00. |
+| State and routing | Plain Flutter. No packages. |
+| Storage | JSON files, one per thing, atomic writes. |
+| Time | Local wall-clock. Minutes since midnight. `LocalDate.at`. |
+| "Past bookings" | Start is before now. The three most recent count. |
+| Window padding | 30 minutes each side, clamped to 06:00 to 22:00. Too-small windows are kept. |
+| Slot precedence | Past, outside hours, conflict, highlighted, available. |
+| Conflicts | Every calendar. All-day and free events never block. Half-open overlap. |
+| Plugin use | Create events only. Never update or delete. |
+| Calendar choice | Stored id if still writable, else the only writable one, else ask. |
+| Deleting a card | Removes its bookings in Recur. The calendar is untouched. |
+| Goldens | 380 px, DPR 1, Outfit, generated on Linux. |
+| Formatting | Hand-written English. No `intl`. |
+| Ids | 32 hex characters from a secure random. |
+| Confirm order | Calendar event first, booking log second. |
+| Weeks | Monday to Sunday. You cannot go back before this week. |
+| Editor defaults | 60 min, Mon to Fri, 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |

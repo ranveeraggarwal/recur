@@ -1,161 +1,111 @@
-# Design system
+# How Recur looks
 
-Quiet and warm. Sand surfaces, one forest green for anything you can tap,
-one cedar brown for the few things that deserve attention. Slightly
-asymmetric cards, soft shadows, no borders, nothing shouting.
+Think of a quiet room with a wooden table. Sand-coloured surfaces, one deep
+forest green for anything you can press, and one warm cedar brown saved for
+the few things that deserve your attention. Cards sit a little off-square,
+like they were placed by hand. Nothing has a hard border and nothing
+shouts.
 
-Every value here lives in `lib/theme/tokens.dart`. Nothing else in `lib/`
-hard-codes a colour, radius, shadow, or text style.
+## The palette and the numbers
 
-## Tokens
+Every value below lives in `lib/theme/tokens.dart`. Nowhere else in the app
+is a colour, size, or font written out by hand.
 
 ```css
 :root {
-  --color-background: #F4EFE6;   /* page */
-  --color-surface:    #FAF7F2;   /* cards, sheets, fields, app bar */
-  --color-text:       #1C1C19;
-  --color-muted:      #938F85;   /* secondary text, hints, disabled */
-  --color-primary:    #2C4A3B;   /* forest green: buttons, FAB, selected states */
-  --color-on-primary: #FAF7F2;
-  --color-accent:     #8A4B38;   /* cedar: highlighted slots and the day dot only, never buttons */
-  --color-accent-tint:  rgba(138, 75, 56, 0.08);   /* Color(0x148A4B38) */
-  --color-primary-tint: rgba(44, 74, 59, 0.08);    /* Color(0x142C4A3B), ripples and pressed */
-  --color-blocked:    #E9E3D8;   /* blocked slots, disabled buttons */
-  --color-divider:    #E3DDD2;
-  --color-error:      #9A4A3A;
+  --background: #F4EFE6;      /* the page, warm sand */
+  --surface:    #FAF7F2;      /* cards, sheets, fields, the app bar */
+  --text:       #1C1C19;      /* nearly black, never black */
+  --muted:      #938F85;      /* second-rank text, hints, disabled */
+  --primary:    #2C4A3B;      /* forest green: buttons, selected things */
+  --on-primary: #FAF7F2;
+  --accent:     #8A4B38;      /* cedar: highlighted slots and the day dot. Never a button. */
+  --accent-tint:  rgba(138, 75, 56, 0.08);
+  --primary-tint: rgba(44, 74, 59, 0.08);   /* ripples and pressed states */
+  --blocked:    #E9E3D8;      /* greyed slots, disabled buttons */
+  --divider:    #E3DDD2;
+  --error:      #9A4A3A;
 
-  --font-family: "Outfit";       /* assets/fonts, weights 400 500 600 */
-  --text-display: 600 28px/34px;
-  --text-title:   600 20px/26px;
-  --text-body:    400 16px/22px;
-  --text-label:   500 14px/18px;
-  --text-caption: 400 12px/16px;
-  --text-button:  500 16px/20px;
+  --font: "Outfit";           /* bundled in assets/fonts, weights 400 500 600 */
+  --display: 600 28px/34px;   --title: 600 20px/26px;   --body: 400 16px/22px;
+  --label:   500 14px/18px;   --caption: 400 12px/16px; --button: 500 16px/20px;
 
-  --space: 4 8 12 16 24 32;      /* xs sm md lg xl xxl */
+  --space: 4 8 12 16 24 32;
 
-  --radius-card-col1: 16px 4px 16px 16px;   /* top-left top-right bottom-right bottom-left */
-  --radius-card-col2: 4px 16px 16px 16px;
-  --radius-button: 12px;  --radius-field: 12px;  --radius-pill: 999px;
-  --radius-slot: 8px;     --radius-fab: 16px;    --radius-sheet: 20px 20px 0 0;
+  --radius-card-left:  16px 4px 16px 16px;  /* cards in the left column */
+  --radius-card-right: 4px 16px 16px 16px;  /* cards in the right column */
+  --radius-button: 12px;  --radius-pill: 999px;  --radius-slot: 8px;
+  --radius-fab: 16px;     --radius-sheet: 20px 20px 0 0;
 
   --shadow-card:  0 12px 24px -4px rgba(44, 74, 59, 0.08);
   --shadow-fab:   0 8px 16px -4px rgba(44, 74, 59, 0.16);
   --shadow-sheet: 0 -8px 24px -4px rgba(44, 74, 59, 0.10);
 
-  --size-touch-min: 44px;  --size-slot-row: 48px;  --size-hour-gutter: 56px;
-  --size-day-pill: 44px x 64px;  --size-fab: 56px;  --size-confirm-bar: 88px;
-  --highlight-border: 3px;
+  --slot-row: 48px;  --hour-gutter: 56px;  --day-pill: 44px x 64px;
+  --fab: 56px;       --confirm-bar: 88px;  --highlight-edge: 3px;
 }
 ```
 
-Rules: no pure black or white, no Material purple, no elevation (cards draw
-their own shadow), no borders on cards or pills, no all-caps, no letter
-spacing. App bar is `surface` with no elevation or scroll tint. Ripples use
-`primary-tint`.
+House rules: no pure black or white, no Material purple, no elevation
+(cards draw their own soft shadow), no borders on cards or pills, no
+capitals, no letter spacing. Ripples are the green tint.
 
-## Components
+## The pieces
 
-**EventCard.** `surface` fill, column-one or column-two radii, card shadow,
-16 px padding, 166 px wide in the grid. Name in `title` (2 lines max), a
-read-only `DurationPill`, location in `caption` `muted`, last-booked line
-in `caption` `muted` (or `primary` when the booking is in the future).
-Takes plain values: `name`, `durationMinutes`, `location`,
-`lastBookedText`, `lastBookedIsFuture`, `column`, `onTap`, `onLongPress`.
+**Card.** Sand-white, off-square corners that mirror left and right, a soft
+green shadow. Name on top, a small duration pill, the location, and the
+"last booked" line at the bottom in muted grey (green if the booking is
+still ahead of you). Pressing tints it green.
 
-| State | Look |
-| --- | --- |
-| default | as above |
-| pressed | `primary-tint` overlay |
+**Duration pill.** A small rounded label like `45 min`. On a card it is a
+quiet green tint. In the Editor it is outlined until you pick it, then
+solid green.
 
-**DurationPill.** 28 px tall, 12 px side padding, `pill` radius, `label`
-text.
+**Day pill.** A tall rounded pill with the weekday over the day number.
+Today wears a thin green ring. The chosen day is solid green. Past days go
+grey and stop responding. A small cedar dot underneath means "there are good
+slots here".
 
-| State | Fill | Text |
-| --- | --- | --- |
-| read-only (on a card) | `primary-tint` | `primary` |
-| unselected | `surface`, 1 px `divider` border | `text` |
-| selected | `primary` | `on-primary` |
+**Slot tile.** One row of the timeline, 48 px tall. Available is plain
+sand-white. Highlighted has an 8% cedar wash and a 3 px cedar edge on the
+left. Selected is solid green with light text. Blocked is flat `blocked`
+grey with a muted reason on the right: the event's name, `Busy`, `Past`, or
+`Outside hours`. Blocked tiles do not react to touch.
 
-**DayPill.** 44 x 64, `pill` radius. Weekday in `caption` over the day
-number in `label`, a 6 px dot below when the day has suggestions. Takes
-`weekdayLabel`, `dayNumber`, `selected`, `enabled`, `hasSuggestions`,
-`isToday`, `onTap`.
+**Confirm button.** Full width, 52 px, green, rounded 12 px. Disabled is
+`blocked` grey with muted text. While working it shows a small spinner
+instead of the label. It lives in an 88 px bar with a one-line summary
+above it. The Editor's Save button is the same component.
 
-| State | Fill | Text | Dot |
-| --- | --- | --- | --- |
-| default | none | `text` | `accent` |
-| today | none, 1 px `primary` ring | `primary` | `accent` |
-| selected | `primary` | `on-primary` | `on-primary` |
-| disabled (past) | none | `muted` | never |
+**Text field.** Label above, sand-white box with a hairline `divider`
+border that turns into a 2 px green line when focused, or a 2 px `error`
+line when something is wrong. Notes get four lines and a `120/500`
+counter.
 
-**SlotTile.** One 48 px row (44 px painted), `slot` radius. Start time in
-`label` on the left; a reason in `caption` `muted` on the right when
-blocked. Takes `timeLabel`, `appearance`, `reasonText`, `onTap`.
+**Plus button.** A 56 px rounded square, not a circle, in green with a
+light plus sign and the fab shadow.
 
-| Appearance | Fill | Extra |
-| --- | --- | --- |
-| available | `surface` | |
-| highlighted | `accent-tint` | 3 px `accent` left edge |
-| selected | `primary` | text `on-primary` |
-| blocked | `blocked` | text `muted`; reason is the event title, `Busy`, `Past`, or `Outside hours`; no tap |
-
-The timeline keeps a 56 px gutter with hour labels in `caption` `muted`
-and a 1 px `divider` line at each full hour.
-
-**ConfirmButton.** Full width, 52 px, `button` radius, `button` text. Used
-for `Confirm` and `Save`.
-
-| State | Fill | Text |
-| --- | --- | --- |
-| enabled | `primary` | `on-primary` |
-| pressed | `primary` + 12% `text` overlay | `on-primary` |
-| disabled | `blocked` | `muted` |
-| busy | `primary` | 20 px spinner instead of the label |
-
-The confirm bar around it: `surface`, sheet shadow, 16 px padding, a
-summary line in `caption` `muted`, 88 px tall.
-
-**RecurTextField.** Label above in `label`. Field `surface` fill, `field`
-radius, 1 px `divider` border, 14/12 px padding, `body` text, placeholder
-`muted`, helper or error in `caption` below.
-
-| State | Border | Label |
-| --- | --- | --- |
-| default | 1 px `divider` | `muted` |
-| focused | 2 px `primary` | `primary` |
-| error | 2 px `error` | `error` |
-| disabled | 1 px `divider`, `blocked` fill | `muted` |
-
-Multiline (notes) is 4 lines with a `120/500` counter.
-
-**RecurFab.** 56 px rounded square (`fab` radius), `primary`, a 24 px plus
-in `on-primary`, fab shadow. Pressed adds a 12% `text` overlay.
-
-**Sheets.** `surface`, `sheet` radius and shadow, a 32 x 4 `divider` handle,
-24 px padding. Confirmation: 40 px check in `primary`, `Booked` in `title`,
-summary in `body`, card name in `caption` `muted`; closes after 2 s.
-Picker: `Write bookings to` in `title`, 56 px rows with name in `body` and
-account in `caption` `muted`, a `primary` check on the chosen row.
+**Sheets.** Sand-white, 20 px top corners, a small grey handle, 24 px
+padding. The confirmation sheet is a green check, `Booked`, the slot, and
+the card name. The calendar picker is `Write bookings to` and one 56 px row
+per calendar, with a green check on the chosen one.
 
 ## Screens at 380 px
 
-- Home: 56 px app bar, `Recur` in `display`, 16 px padding and gutters,
-  cards 166 px wide, FAB bottom right. Empty state `No events yet.` in
-  `title` with `Tap + to add one.` in `body` `muted` below.
-- Editor: 24 px between groups, Save in an 88 px bar at the bottom.
-- Booking: 72 px week header (`Week of 7 Sep` in `label`, 44 px chevrons),
-  day strip of 64 px pills, a divider, the timeline, the 88 px confirm bar.
-- Access states: the message in `body` centred with 32 px side padding,
-  then a content-sized `ConfirmButton`.
+Home: a 56 px app bar with `Recur` in display size, 16 px margins, cards
+166 px wide, plus button bottom right. Editor: 24 px between groups, Save
+pinned at the bottom. Booking: a 72 px week header (`Week of 7 Sep` with
+44 px chevrons), the day strip, a hairline, the timeline, the confirm bar.
+Access messages sit centred in body text with a content-sized button below.
 
-## Copy
+## Words
 
-Plain words, sentence case. `PT session`, `Confirm`, `Save`, `Booked`,
-`No events yet.` Never "flow", "ritual", "breathe". No all-caps, no
+Short and plain, sentence case. `PT session`, `Confirm`, `Save`, `Booked`,
+`No events yet.` Never "flow", "ritual", or "breathe". No capitals, no
 exclamation marks.
 
-## Done means
+## When a screen is done
 
-Only tokens used, a golden at 380 px for every state above, copy matching
-this file exactly, and `flutter analyze --fatal-infos` clean.
+It uses only the tokens above, every state has a golden image at 380 px,
+the words match this page exactly, and `flutter analyze --fatal-infos`
+has nothing to say.
