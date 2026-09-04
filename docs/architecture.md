@@ -101,6 +101,10 @@ for every visual state, taken at 380 px wide with the Outfit font loaded.
 Goldens are generated on Linux, which is what CI runs. Nothing in the test
 suite touches the real plugin.
 
+Load the fonts from `setUpAll`, never from inside a `testWidgets` body. A
+widget test runs in a fake-async zone where a real file read never
+completes, so loading them in the test body hangs until it times out.
+
 ## Decisions we made so nobody has to make them again
 
 | | |
