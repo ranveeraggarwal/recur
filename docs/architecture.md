@@ -126,3 +126,6 @@ completes, so loading them in the test body hangs until it times out.
 | Weeks | Monday to Sunday. You cannot go back before this week. |
 | Editor defaults | 60 min, Mon to Fri, 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |
 | Outfit font | Google Fonts ships Outfit only as a variable font, so the three static weights are instanced from it at 400, 500 and 600 with fontTools and vendored under `assets/fonts`. |
+| `formatLastBooked` signature | `Booking` does not exist yet, so it takes `{required DateTime? latestStart, required DateTime now}` instead of `(Booking? latest, DateTime now)`. |
+| `formatSlotSummary` signature | `Slot` does not exist yet, so `core/formatting.dart` provides `formatDaySpan({required LocalDate date, required int startMinutes, required int endMinutes})` instead. |
+| `FixedClock` mutation API | `Clock.now` is an interface method, and Dart does not allow a method and a property setter to share a name in the same class, so `FixedClock` exposes `setNow(DateTime value)` as a plain method rather than a `now` setter. |
