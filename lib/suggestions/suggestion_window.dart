@@ -30,11 +30,8 @@ final class SuggestionWindow {
       other.endMinutes == endMinutes;
 
   @override
-  int get hashCode => Object.hash(
-    Object.hashAllUnordered(weekdays),
-    startMinutes,
-    endMinutes,
-  );
+  int get hashCode =>
+      Object.hash(Object.hashAllUnordered(weekdays), startMinutes, endMinutes);
 
   @override
   String toString() =>

@@ -55,7 +55,8 @@ SuggestionWindow suggestionWindowFor({
     if (startMinute < earliest) earliest = startMinute;
 
     final crossedMidnight =
-        LocalDate.fromDateTime(b.end).compareTo(LocalDate.fromDateTime(b.start)) >
+        LocalDate.fromDateTime(b.end)
+            .compareTo(LocalDate.fromDateTime(b.start)) >
         0;
     final endMinute = crossedMidnight ? 1440 : minutesOfDay(b.end);
     if (endMinute > latest) latest = endMinute;

@@ -154,25 +154,22 @@ void main() {
     expect(window.weekdays, {1, 3, 5});
   });
 
-  test(
-    'two-way tie with three bookings is impossible; two same one different '
-    '-> pair only',
-    () {
-      final bookings = [
-        booking(DateTime(2026, 8, 31, 9, 0), 60), // Monday
-        booking(DateTime(2026, 9, 7, 9, 0), 60), // Monday
-        booking(DateTime(2026, 9, 8, 9, 0), 60), // Tuesday
-      ];
+  test('two-way tie with three bookings is impossible; two same one different '
+      '-> pair only', () {
+    final bookings = [
+      booking(DateTime(2026, 8, 31, 9, 0), 60), // Monday
+      booking(DateTime(2026, 9, 7, 9, 0), 60), // Monday
+      booking(DateTime(2026, 9, 8, 9, 0), 60), // Tuesday
+    ];
 
-      final window = suggestionWindowFor(
-        eventType: card(),
-        bookings: bookings,
-        now: now,
-      );
+    final window = suggestionWindowFor(
+      eventType: card(),
+      bookings: bookings,
+      now: now,
+    );
 
-      expect(window.weekdays, {1});
-    },
-  );
+    expect(window.weekdays, {1});
+  });
 
   test('bookings given out of order are sorted by start', () {
     final oldest = booking(DateTime(2026, 8, 23, 6, 0), 60); // Sunday
