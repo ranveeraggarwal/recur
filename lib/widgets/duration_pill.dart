@@ -10,7 +10,12 @@ import '../theme/tokens.dart';
 /// `false`, or `primary` fill with `onPrimary` text when [selected] is
 /// `true`.
 class DurationPill extends StatelessWidget {
-  const DurationPill({super.key, required this.label, this.selected = false, this.onTap});
+  const DurationPill({
+    super.key,
+    required this.label,
+    this.selected = false,
+    this.onTap,
+  });
 
   /// The text shown, e.g. `formatDuration(45)` (`45 min`) or a custom
   /// label such as `Custom`.

@@ -218,4 +218,7 @@ class RecurSizes {
 
   /// SlotTile highlighted left border.
   static const double highlightBorder = 3;
+
+  /// Minimum height of an [EventCard] in the Home grid.
+  static const double cardMinHeight = 132;
 }

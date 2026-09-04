@@ -52,10 +52,9 @@ class EventCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
-  BorderRadius get _radius =>
-      column == CardColumn.one
-          ? RecurRadii.cardColumnOne
-          : RecurRadii.cardColumnTwo;
+  BorderRadius get _radius => column == CardColumn.one
+      ? RecurRadii.cardColumnOne
+      : RecurRadii.cardColumnTwo;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +74,9 @@ class EventCard extends StatelessWidget {
           splashColor: RecurColors.primaryTint,
           highlightColor: RecurColors.primaryTint,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: RecurSizes.cardMinHeight),
+            constraints: const BoxConstraints(
+              minHeight: RecurSizes.cardMinHeight,
+            ),
             child: Padding(
               padding: const EdgeInsets.all(RecurSpacing.lg),
               child: IntrinsicHeight(
@@ -94,7 +95,9 @@ class EventCard extends StatelessWidget {
                       const SizedBox(height: RecurSpacing.sm),
                       Text(
                         location!,
-                        style: RecurText.caption.copyWith(color: RecurColors.muted),
+                        style: RecurText.caption.copyWith(
+                          color: RecurColors.muted,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -103,7 +106,9 @@ class EventCard extends StatelessWidget {
                     Text(
                       lastBookedText,
                       style: RecurText.caption.copyWith(
-                        color: lastBookedIsFuture ? RecurColors.primary : RecurColors.muted,
+                        color: lastBookedIsFuture
+                            ? RecurColors.primary
+                            : RecurColors.muted,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
