@@ -1,0 +1,123 @@
+# How Recur is built
+
+A small app deserves a small architecture. Here is the whole thing.
+
+## The tools
+
+Flutter 3.47.2 (Dart 3.13.2), Android only, minSdk 24, targetSdk 35. One
+plugin for the calendar, `device_calendar_plus` 0.8.0, and `path_provider`
+for a folder to save files in. That is the full dependency list.
+
+Before you push anything:
+
+```sh
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze --fatal-infos
+TZ=Europe/Stockholm flutter test
+flutter build apk --debug
+```
+
+## The shape
+
+```
+lib/
+  core/          dates, clocks, ids, and the little text formatters
+  data/          the three models and where they are saved
+  calendar/      the gateway to the phone calendar, a fake, and the real one
+  suggestions/   the slot logic
+  theme/         every colour, size, and font, in one file
+  widgets/       cards, pills, tiles, buttons
+  screens/       home, editor, booking
+```
+
+Three ideas hold it together.
+
+**One door to the calendar.** Everything that touches the phone calendar
+goes through a small interface called `CalendarGateway`. It can check and
+ask for permission, list calendars you can write to, fetch busy times, and
+create one event. There is a fake version that lives in memory, and every
+screen and every test uses the fake. Only one file in the whole app,
+`device_calendar_gateway.dart`, knows the plugin exists.
+
+**Wall-clock time, always.** An appointment is "Tuesday at ten", not an
+instant on a global timeline. So Recur stores and shows local times, and it
+counts times of day in minutes since midnight (06:00 is 360, 22:00 is
+1320). A tiny `LocalDate` type turns a date plus minutes into a `DateTime`.
+Nothing adds hours to midnight to find a slot; on the day the clocks change
+that would be an hour off. Tests that care run in the Stockholm zone.
+
+**Files, not a database.** The app has three things to remember: the cards,
+the bookings, and which calendar you chose. Each is a small JSON file in
+the app's folder, written to a temp name and renamed so a crash cannot leave
+a half-written file. Three repositories read and write them, one per thing.
+Tests swap in an in-memory store.
+
+## The data
+
+A **card** (`EventType`) has a name, a duration in minutes, an optional
+location and notes, the weekdays you prefer, and a start and end time.
+
+A **booking** has the card it belongs to, a start and end, and the id of
+the calendar and event it was written to. Bookings are never edited; they
+disappear only when their card is deleted.
+
+**Settings** is one optional string: the chosen calendar id.
+
+## The slot logic
+
+Two pure functions, no side effects, easy to test.
+
+`suggestionWindowFor` takes a card and its bookings and returns a window:
+a set of weekdays plus a start and end time. Fewer than three past
+bookings, it hands back the card's preference. Otherwise it takes the three
+most recent, picks the most common weekday (ties keep all), spans the
+earliest start to the latest end, pads by 30 minutes, and clamps to 06:00
+to 22:00.
+
+`buildSlotGrid` takes a date, a duration, a window, the busy times, and
+"now", and returns the 32 slots of that day. Each slot is past, outside
+hours, a conflict, highlighted, or available, checked in exactly that
+order.
+
+## The screens
+
+Dependencies are bundled into one object and handed down the widget tree
+with an `InheritedWidget` called `AppScope`. Screens navigate with plain
+`Navigator.push`. Each screen has its own small controller (a
+`ChangeNotifier`). No state-management library, no router library.
+
+When you confirm, the Booking controller writes the calendar event first
+and logs the booking second. If the write fails, nothing is logged and you
+see `Couldn't add to calendar.` The calendar it writes to is the one you
+chose, or the only writable one, or it asks.
+
+Run the app against the fake calendar with
+`flutter run --dart-define=USE_FAKE_CALENDAR=true`.
+
+## Tests
+
+Unit tests for the logic, widget tests for the screens, and golden images
+for every visual state, taken at 380 px wide with the Outfit font loaded.
+Goldens are generated on Linux, which is what CI runs. Nothing in the test
+suite touches the real plugin.
+
+## Decisions we made so nobody has to make them again
+
+| | |
+| --- | --- |
+| State and routing | Plain Flutter. No packages. |
+| Storage | JSON files, one per thing, atomic writes. |
+| Time | Local wall-clock. Minutes since midnight. `LocalDate.at`. |
+| "Past bookings" | Start is before now. The three most recent count. |
+| Window padding | 30 minutes each side, clamped to 06:00 to 22:00. Too-small windows are kept. |
+| Slot precedence | Past, outside hours, conflict, highlighted, available. |
+| Conflicts | Every calendar. All-day and free events never block. Half-open overlap. |
+| Plugin use | Create events only. Never update or delete. |
+| Calendar choice | Stored id if still writable, else the only writable one, else ask. |
+| Deleting a card | Removes its bookings in Recur. The calendar is untouched. |
+| Goldens | 380 px, DPR 1, Outfit, generated on Linux. |
+| Formatting | Hand-written English. No `intl`. |
+| Ids | 32 hex characters from a secure random. |
+| Confirm order | Calendar event first, booking log second. |
+| Weeks | Monday to Sunday. You cannot go back before this week. |
+| Editor defaults | 60 min, Mon to Fri, 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |
