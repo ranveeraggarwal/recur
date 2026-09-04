@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/theme/app_theme.dart';
@@ -30,9 +32,15 @@ Future<void> pumpGolden(
 }
 
 /// Compares the current [MaterialApp] against `test/goldens/$name.png`.
+///
+/// Resolved as an absolute path from the package root (where `flutter
+/// test` runs), rather than relative to the calling test file, so every
+/// golden test — regardless of which subdirectory it lives in — reads and
+/// writes `test/goldens/`, never a `goldens/` folder alongside itself.
 Future<void> expectGolden(WidgetTester tester, String name) async {
+  final file = File('test/goldens/$name.png');
   await expectLater(
     find.byType(MaterialApp),
-    matchesGoldenFile('goldens/$name.png'),
+    matchesGoldenFile(file.absolute.uri),
   );
 }
