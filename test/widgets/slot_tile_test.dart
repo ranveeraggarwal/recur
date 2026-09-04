@@ -122,6 +122,9 @@ void main() {
       height: 400,
     );
 
-    await expectGolden(tester, 'slot_tile_states');
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('../goldens/slot_tile_states.png'),
+    );
   });
 }

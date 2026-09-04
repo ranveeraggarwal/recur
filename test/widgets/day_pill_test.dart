@@ -120,6 +120,9 @@ void main() {
       height: 96,
     );
 
-    await expectGolden(tester, 'day_pill_states');
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('../goldens/day_pill_states.png'),
+    );
   });
 }
