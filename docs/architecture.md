@@ -121,3 +121,4 @@ suite touches the real plugin.
 | Confirm order | Calendar event first, booking log second. |
 | Weeks | Monday to Sunday. You cannot go back before this week. |
 | Editor defaults | 60 min, Mon to Fri, 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |
+| Outfit font | Google Fonts ships Outfit only as a variable font, so the three static weights are instanced from it at 400, 500 and 600 with fontTools and vendored under `assets/fonts`. |
