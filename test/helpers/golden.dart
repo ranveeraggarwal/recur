@@ -45,11 +45,14 @@ Future<void> pumpGolden(
 
 /// Compares the current [MaterialApp] against `test/goldens/$name.png`.
 ///
-/// Resolved from the project root (flutter test's working directory)
-/// rather than the calling test file's directory, so every test — whether
-/// it lives directly under `test/` or in a subdirectory like
-/// `test/widgets/` — shares the single `test/goldens/` directory.
+/// Resolved as an absolute path from the package root (where `flutter
+/// test` runs), rather than relative to the calling test file, so every
+/// golden test — regardless of which subdirectory it lives in — reads and
+/// writes `test/goldens/`, never a `goldens/` folder alongside itself.
 Future<void> expectGolden(WidgetTester tester, String name) async {
-  final uri = Uri.file('${Directory.current.path}/test/goldens/$name.png');
-  await expectLater(find.byType(MaterialApp), matchesGoldenFile(uri));
+  final file = File('test/goldens/$name.png');
+  await expectLater(
+    find.byType(MaterialApp),
+    matchesGoldenFile(file.absolute.uri),
+  );
 }
