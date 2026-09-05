@@ -15,7 +15,7 @@ import 'confirmation_sheet.dart';
 import 'day_strip.dart';
 import 'timeline.dart';
 
-/// The week view for one card: day strip, timeline, and the confirm flow.
+/// The week view for one card: day strip, timeline, and the confirm bar.
 /// Reads its dependencies only through `AppScope.of(context)`.
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key, required this.eventTypeId});
@@ -296,9 +296,10 @@ class _AccessState extends StatelessWidget {
             Text(message, style: RecurText.body, textAlign: TextAlign.center),
             if (buttonLabel != null) ...[
               const SizedBox(height: RecurSpacing.lg),
-              SizedBox(
-                width: 220,
-                child: ConfirmButton(label: buttonLabel, onPressed: onPressed),
+              ConfirmButton(
+                label: buttonLabel,
+                onPressed: onPressed,
+                expand: false,
               ),
             ],
           ],

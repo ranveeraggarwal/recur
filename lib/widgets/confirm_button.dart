@@ -6,9 +6,10 @@ import '../theme/tokens.dart';
 /// this file is pressed.
 const Color _pressedOverlay = Color(0x1F1C1C19);
 
-/// Full-width primary button. Height [RecurSizes.touchMin] and up (fixed at
-/// 52px), radius [RecurRadii.button], text [RecurText.button], no icon, no
-/// elevation.
+/// Primary button. Height [RecurSizes.touchMin] and up (fixed at 52px),
+/// radius [RecurRadii.button], text [RecurText.button], no icon, no
+/// elevation. Full width by default; pass [expand] false for a
+/// content-sized button (e.g. the Booking access states).
 ///
 /// Used both as the calendar screen's confirm action and as Save in the
 /// event editor.
@@ -18,6 +19,7 @@ class ConfirmButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.busy = false,
+    this.expand = true,
   });
 
   /// The button's text. Ignored while [busy].
@@ -29,10 +31,14 @@ class ConfirmButton extends StatelessWidget {
   /// Shows a spinner instead of [label] and ignores taps while `true`.
   final bool busy;
 
+  /// When `false`, the button sizes to its label's intrinsic width instead
+  /// of filling the available width.
+  final bool expand;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
+      width: expand ? double.infinity : null,
       height: 52,
       child: FilledButton(
         onPressed: busy ? null : onPressed,
@@ -78,18 +84,32 @@ class ConfirmButton extends StatelessWidget {
   }
 }
 
-/// Sticky bar wrapping a [ConfirmButton] with a summary line above it, used
-/// at the bottom of the calendar screen.
+/// Sticky bar wrapping a [ConfirmButton] with an optional summary line above
+/// it, used at the bottom of the calendar screen and as the Editor's Save
+/// bar. Always [RecurSizes.confirmBar] (88px) tall total, whether or not a
+/// summary is shown: the button is a fixed 52px, and the vertical padding is
+/// derived from what's left so the two callers can't drift apart.
 class ConfirmBar extends StatelessWidget {
   const ConfirmBar({super.key, required this.summary, required this.button});
 
-  /// Shown in [RecurText.caption] muted, above the button.
+  /// Shown in [RecurText.caption] muted, above the button. When empty, the
+  /// summary line (and the gap below it) is omitted entirely rather than
+  /// reserving its height, so the bar stays 88px whether Booking passes a
+  /// real summary or the Editor passes `''`.
   final String summary;
 
   final ConfirmButton button;
 
+  /// Height of one line of [RecurText.caption] (12px font, 16/12 line
+  /// height).
+  static const double _summaryLineHeight = 16;
+
   @override
   Widget build(BuildContext context) {
+    final hasSummary = summary.isNotEmpty;
+    final contentHeight =
+        52 + (hasSummary ? _summaryLineHeight + RecurSpacing.sm : 0);
+    final verticalPadding = (RecurSizes.confirmBar - contentHeight) / 2;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: RecurColors.surface,
@@ -97,19 +117,27 @@ class ConfirmBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(RecurSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                summary,
-                style: RecurText.caption.copyWith(color: RecurColors.muted),
-              ),
-              const SizedBox(height: RecurSpacing.sm),
-              button,
-            ],
+        child: SizedBox(
+          height: RecurSizes.confirmBar,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: RecurSpacing.lg,
+              vertical: verticalPadding,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasSummary) ...[
+                  Text(
+                    summary,
+                    style: RecurText.caption.copyWith(color: RecurColors.muted),
+                  ),
+                  const SizedBox(height: RecurSpacing.sm),
+                ],
+                button,
+              ],
+            ),
           ),
         ),
       ),

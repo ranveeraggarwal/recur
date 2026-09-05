@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/editor/editor_screen.dart';
+import 'package:recur/theme/app_theme.dart';
 import 'package:recur/widgets/confirm_button.dart';
 
 import '../helpers/fakes.dart';
@@ -235,6 +236,32 @@ void main() {
       await tester.pumpAndSettle();
 
       await expectGolden(tester, 'editor_custom_duration');
+    });
+
+    testWidgets('editor_delete_dialog', (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await testDeps.deps.eventTypes.upsert(_ptSession());
+
+      tester.view.physicalSize = const Size(goldenWidth, 400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        AppScope(
+          deps: testDeps.deps,
+          child: MaterialApp(
+            theme: buildRecurTheme(),
+            home: const EditorScreen(eventTypeId: 'et-1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Delete event type'));
+      await tester.tap(find.text('Delete event type'));
+      await tester.pumpAndSettle();
+
+      await expectGolden(tester, 'editor_delete_dialog');
     });
   });
 }
