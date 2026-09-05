@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   path_provider: ^2.1.0
+  device_calendar_plus: ^0.8.0
 
 dev_dependencies:
   flutter_test:
