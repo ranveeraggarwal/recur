@@ -134,6 +134,30 @@ void main() {
     expect(card.lastBookedIsFuture, isTrue);
   });
 
+  testWidgets('requests calendar access on load when not yet determined', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    testDeps.calendar.access = CalendarAccess.notDetermined;
+    testDeps.calendar.accessAfterRequest = CalendarAccess.granted;
+
+    await _pumpHome(tester, testDeps);
+
+    expect(testDeps.calendar.requestAccessCalls, 1);
+  });
+
+  testWidgets(
+    'does not request calendar access again once already determined',
+    (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      testDeps.calendar.access = CalendarAccess.denied;
+
+      await _pumpHome(tester, testDeps);
+
+      expect(testDeps.calendar.requestAccessCalls, 0);
+    },
+  );
+
   testWidgets('no calendar icon with only one writable calendar', (
     WidgetTester tester,
   ) async {
