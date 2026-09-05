@@ -12,6 +12,21 @@ them, but the docs win if they disagree.
 
 Toolchain: Flutter 3.47.2 stable (Dart 3.13.2). CI pins this version.
 
+## Running
+
+Against the real device calendar:
+
+```sh
+flutter run
+```
+
+Against the fake calendar, so it runs in an emulator without a calendar
+account:
+
+```sh
+flutter run --dart-define=USE_FAKE_CALENDAR=true
+```
+
 ## Before you push
 
 CI runs these in order and stops at the first failure, so one formatting slip
