@@ -66,6 +66,13 @@ Today wears a thin green ring. The chosen day is solid green. Past days go
 grey and stop responding. A small cedar dot underneath means "there are good
 slots here".
 
+**Event block.** One event on the copy-from-calendar grid: sand-white
+under an 8% cedar wash, a 3 px cedar edge on the left, radius `slot`,
+placed and sized by the event's own time. The name on top, then a muted
+`10:00 to 10:45 · Vasastan` when the block is at least 56 px tall. Two
+events at the same time share the width. Nothing shorter than 40 px, so
+even a 15-minute event can be read and tapped.
+
 **Slot tile.** One row of the timeline, 48 px tall. Available is plain
 sand-white. Highlighted has an 8% cedar wash and a 3 px cedar edge on the
 left. Selected is solid green with light text. Blocked is flat `blocked`
@@ -90,10 +97,7 @@ light plus sign and the fab shadow.
 **Sheets.** Sand-white, 20 px top corners, a small grey handle, 24 px
 padding. The confirmation sheet is a green check, `Booked`, the slot, and
 the card name. The calendar picker is `Write bookings to` and one 56 px row
-per calendar, with a green check on the chosen one. The prefill sheet is
-`Copy from calendar` and one 56 px row per event name, the name over a
-muted line of `45 min · Tue 1 Sep · Vasastan`; with nothing to offer it
-says `Nothing in your calendar to copy.` instead.
+per calendar, with a green check on the chosen one.
 
 ## Screens at 380 px
 
@@ -104,8 +108,11 @@ two `Start`/`End` fields side by side, with a muted × after them once
 there is more than one — over a green `Add a time` text button. A new
 card carries a green `Copy from calendar` text button above the name.
 Booking: a 72 px week header (`Week of 7 Sep` with 44 px chevrons), the
-day strip, a hairline, the timeline, the confirm bar.
-Access messages sit centred in body text with a content-sized button below.
+day strip, a hairline, the timeline, the confirm bar. Copy from calendar
+wears the same header, day strip and hairline over an hour grid at 96 px
+an hour - two Booking rows - running 06:00 to 22:00, stretched to hold
+any event outside those hours. Access messages sit centred in body text
+with a content-sized button below.
 
 ## Words
 

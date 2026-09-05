@@ -40,10 +40,14 @@ Save stays grey until the form makes sense. Delete warns you:
 `Delete "PT session"? Past bookings are removed from Recur. Calendar
 events are not touched.`
 
-A new card starts with `Copy from calendar`. It opens a sheet of the
-events already in your calendar, one row per name, newest first, and
-filling in the name, how long it takes, where it is, the notes, the
-weekdays it has fallen on, and the times of day it has run at. Everything
+A new card starts with `Copy from calendar`. It opens a week of your real
+calendar - the same day pills and hour grid as Booking, except you can go
+back as far as three months, because copying looks backwards. Tap a day,
+tap the event you mean, and the card fills in: its name, how long it
+takes, where it is, its notes, the weekdays it falls on, and the times of
+day it runs at. Where it is and its notes come from the event you tapped,
+or from the most recent one with the same name that has them, so a series
+whose latest entry lost its address still brings the address. Everything
 it fills in, you can change.
 
 **Booking** is the week view. Seven day pills across the top, a timeline of

@@ -16,7 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   a window and each extra one has an × to remove it.
 - Editor: `Copy from calendar` fills a new card in from an event already
   in the phone calendar - its name, duration, location, notes, weekdays,
-  and the times of day it has run at.
+  and the times of day it has run at. Events are picked from a week view
+  of the real calendar, and a location or notes missing from the event
+  you tap is taken from the most recent event of the same name that has
+  them.
 
 ## 1.0.0 - 2026-09-05
 

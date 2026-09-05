@@ -9,7 +9,8 @@ import '../../widgets/duration_pill.dart';
 import '../../widgets/location_autocomplete_field.dart';
 import '../../widgets/recur_text_field.dart';
 import 'editor_controller.dart';
-import 'prefill_sheet.dart';
+import 'event_prefill.dart';
+import 'prefill_screen.dart';
 
 const List<String> _weekdayLabels = [
   'Mon',
@@ -90,13 +91,15 @@ class _EditorScreenState extends State<EditorScreen> {
     super.dispose();
   }
 
-  /// Opens the copy-from-calendar sheet and, when the user picks an
+  /// Opens the copy-from-calendar week view and, when the user picks an
   /// event, replaces the whole draft with it. The text fields are pushed
   /// their new values by hand: they own their own [TextEditingController]s
   /// and do not rebuild from the controller.
   Future<void> _copyFromCalendar() async {
     final controller = _controller!;
-    final prefill = await showPrefillSheet(context);
+    final prefill = await Navigator.of(context).push<EventPrefill>(
+      MaterialPageRoute(builder: (context) => const PrefillScreen()),
+    );
     if (prefill == null || !mounted) return;
 
     controller.applyPrefill(prefill);
