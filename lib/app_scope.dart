@@ -6,6 +6,7 @@ import 'core/id_generator.dart';
 import 'data/booking_repository.dart';
 import 'data/event_type_repository.dart';
 import 'data/settings_repository.dart';
+import 'places/places_gateway.dart';
 
 /// Everything a screen needs, injected once at the root. See
 /// `docs/architecture.md`, section "App wiring".
@@ -17,6 +18,7 @@ final class AppDependencies {
     required this.bookings,
     required this.settings,
     required this.calendar,
+    required this.places,
   });
 
   final Clock clock;
@@ -25,6 +27,7 @@ final class AppDependencies {
   final BookingRepository bookings;
   final SettingsRepository settings;
   final CalendarGateway calendar;
+  final PlacesGateway places;
 }
 
 /// Makes [AppDependencies] available to every descendant of [RecurApp].
