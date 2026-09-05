@@ -4,7 +4,18 @@ import '../theme/tokens.dart';
 
 /// Visual appearance of a [SlotTile], mapped by the Booking screen from a
 /// `Slot`'s state and whether it is the selected slot.
-enum SlotTileAppearance { available, highlighted, selected, blocked }
+///
+/// [blocked] is a row taken by something: a calendar event, the past, or
+/// the end of the day. [doesNotFit] is a row that is free itself but too
+/// close to the next event for the appointment to fit, so it keeps the
+/// plain surface and only goes quiet.
+enum SlotTileAppearance {
+  available,
+  highlighted,
+  selected,
+  blocked,
+  doesNotFit,
+}
 
 /// One 30-minute row in the timeline. Height [RecurSizes.slotRow] (48 px),
 /// with a 2 px vertical inset so tiles do not touch, radius `slot`.
@@ -23,7 +34,7 @@ class SlotTile extends StatelessWidget {
   final String timeLabel;
   final SlotTileAppearance appearance;
 
-  /// Shown at the right, blocked tiles only.
+  /// Shown at the right, on blocked and does-not-fit tiles only.
   final String? reasonText;
 
   final VoidCallback? onTap;
@@ -31,20 +42,23 @@ class SlotTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool blocked = appearance == SlotTileAppearance.blocked;
+    final bool doesNotFit = appearance == SlotTileAppearance.doesNotFit;
     final bool highlighted = appearance == SlotTileAppearance.highlighted;
     final bool selected = appearance == SlotTileAppearance.selected;
+    final bool interactive = !blocked && !doesNotFit;
 
     final Color fill = switch (appearance) {
       SlotTileAppearance.available => RecurColors.surface,
       SlotTileAppearance.highlighted => RecurColors.accentTint,
       SlotTileAppearance.selected => RecurColors.primary,
       SlotTileAppearance.blocked => RecurColors.blocked,
+      SlotTileAppearance.doesNotFit => RecurColors.surface,
     };
     final Color textColor = selected
         ? RecurColors.onPrimary
-        : blocked
-        ? RecurColors.muted
-        : RecurColors.text;
+        : interactive
+        ? RecurColors.text
+        : RecurColors.muted;
 
     final borderRadius = const BorderRadius.all(
       Radius.circular(RecurRadii.slot),
@@ -55,7 +69,7 @@ class SlotTile extends StatelessWidget {
       child: Row(
         children: [
           Text(timeLabel, style: RecurText.label.copyWith(color: textColor)),
-          if (blocked && reasonText != null) ...[
+          if (!interactive && reasonText != null) ...[
             const Spacer(),
             Flexible(
               child: Text(
@@ -90,7 +104,7 @@ class SlotTile extends StatelessWidget {
       color: fill,
       shape: RoundedRectangleBorder(borderRadius: borderRadius),
       clipBehavior: Clip.antiAlias,
-      child: blocked ? stack : InkWell(onTap: onTap, child: stack),
+      child: interactive ? InkWell(onTap: onTap, child: stack) : stack,
     );
 
     return Padding(

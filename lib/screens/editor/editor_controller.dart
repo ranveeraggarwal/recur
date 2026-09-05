@@ -5,7 +5,18 @@
 import 'package:flutter/foundation.dart';
 
 import '../../app_scope.dart';
+import '../../core/time_of_day_minutes.dart';
+import '../../core/time_window.dart';
 import '../../data/models/event_type.dart';
+import 'event_prefill.dart';
+
+/// The durations the Editor offers as pills; anything else is "Custom".
+const List<int> editorPresetDurations = [30, 45, 60, 90];
+
+int _roundUpToSlot(int minutes) {
+  final remainder = minutes % slotMinutes;
+  return remainder == 0 ? minutes : minutes + (slotMinutes - remainder);
+}
 
 /// Draft state for the Editor screen: one event type being created or
 /// edited, with live validation, [save], and [delete].
@@ -45,8 +56,12 @@ class EditorController extends ChangeNotifier {
 
   Set<int> weekdays = {1, 2, 3, 4, 5};
 
-  int startMinutes = 480;
-  int endMinutes = 1080;
+  /// The preferred times of day, in the order they are shown. Always at
+  /// least one; a card can want mornings and late afternoons but nothing
+  /// in between.
+  List<TimeWindow> windows = const [
+    TimeWindow(startMinutes: 480, endMinutes: 1080),
+  ];
 
   /// Loads the existing card's fields when [eventTypeId] is set, or leaves
   /// the D18 defaults (60 min, Mon-Fri, 08:00-18:00) in place for a new
@@ -58,13 +73,14 @@ class EditorController extends ChangeNotifier {
       if (existing != null) {
         name = existing.name;
         durationMinutes = existing.durationMinutes;
-        isCustomDuration = ![30, 45, 60, 90].contains(existing.durationMinutes);
+        isCustomDuration = !editorPresetDurations.contains(
+          existing.durationMinutes,
+        );
         customDurationText = '${existing.durationMinutes}';
         location = existing.location;
         notes = existing.notes;
         weekdays = Set.of(existing.preferredWeekdays);
-        startMinutes = existing.preferredStartMinutes;
-        endMinutes = existing.preferredEndMinutes;
+        windows = List.of(existing.preferredWindows);
         _createdAt = existing.createdAt;
       }
     }
@@ -86,11 +102,10 @@ class EditorController extends ChangeNotifier {
     return null;
   }
 
-  String? get windowError => EventType.validateWindow(
-    start: startMinutes,
-    end: endMinutes,
-    duration: durationMinutes,
-  );
+  /// The first problem among [windows], or `null` when every one of them
+  /// is valid.
+  String? get windowError =>
+      EventType.validateWindows(windows: windows, duration: durationMinutes);
 
   bool get isValid =>
       EventType.validateName(name) == null &&
@@ -145,13 +160,64 @@ class EditorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setStartMinutes(int minutes) {
-    startMinutes = minutes;
+  void setWindowStart(int index, int minutes) {
+    windows = [
+      for (var i = 0; i < windows.length; i++)
+        i == index ? windows[i].copyWith(startMinutes: minutes) : windows[i],
+    ];
     notifyListeners();
   }
 
-  void setEndMinutes(int minutes) {
-    endMinutes = minutes;
+  void setWindowEnd(int index, int minutes) {
+    windows = [
+      for (var i = 0; i < windows.length; i++)
+        i == index ? windows[i].copyWith(endMinutes: minutes) : windows[i],
+    ];
+    notifyListeners();
+  }
+
+  /// Appends a window that starts where the last one ends, or as close to
+  /// it as 22:00 allows, long enough to hold one appointment.
+  void addWindow() {
+    windows = [...windows, _nextWindow()];
+    notifyListeners();
+  }
+
+  /// Removes the window at [index]. The last remaining window stays: a
+  /// card always prefers some time of day.
+  void removeWindow(int index) {
+    if (windows.length <= 1) return;
+    if (index < 0 || index >= windows.length) return;
+    windows = [
+      for (var i = 0; i < windows.length; i++)
+        if (i != index) windows[i],
+    ];
+    notifyListeners();
+  }
+
+  TimeWindow _nextWindow() {
+    final span = _roundUpToSlot(
+      durationMinutes < slotMinutes ? slotMinutes : durationMinutes,
+    );
+    final previousEnd = windows.isEmpty ? 480 : windows.last.endMinutes;
+    var start = previousEnd;
+    if (start + span > dayEndMinutes) start = dayEndMinutes - span;
+    if (start < dayStartMinutes) start = dayStartMinutes;
+    return TimeWindow(startMinutes: start, endMinutes: start + span);
+  }
+
+  /// Fills the whole form in from an event already in the calendar. The
+  /// user can still change anything before saving.
+  void applyPrefill(EventPrefill prefill) {
+    name = prefill.name;
+    nameTouched = true;
+    durationMinutes = prefill.durationMinutes;
+    isCustomDuration = !editorPresetDurations.contains(prefill.durationMinutes);
+    customDurationText = '${prefill.durationMinutes}';
+    location = prefill.location;
+    notes = prefill.notes;
+    weekdays = Set.of(prefill.weekdays);
+    windows = List.of(prefill.windows);
     notifyListeners();
   }
 
@@ -175,8 +241,7 @@ class EditorController extends ChangeNotifier {
             ? null
             : trimmedNotes,
         preferredWeekdays: Set.of(weekdays),
-        preferredStartMinutes: startMinutes,
-        preferredEndMinutes: endMinutes,
+        preferredWindows: List.of(windows),
         createdAt: createdAt,
       ),
     );

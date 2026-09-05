@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## Unreleased
+
+- Bookings whose calendar event has been deleted are dropped on the next
+  Home or Booking load, so a card stops claiming it is booked and the
+  suggestions stop counting the event that is no longer there.
+- Booking: an event in the calendar now greys only the rows it actually
+  covers. A row that is free but too close to the next event stays
+  sand-white and reads `Not enough room`.
+- Editor: a card can prefer more than one time of day. `Add a time` adds
+  a window and each extra one has an × to remove it.
+- Editor: `Copy from calendar` fills a new card in from an event already
+  in the phone calendar - its name, duration, location, notes, weekdays,
+  and the times of day it has run at.
+
 ## 1.0.0 - 2026-09-05
 
 - Home: a grid of event-type cards with an empty state and a button to add

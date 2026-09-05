@@ -2,6 +2,9 @@
 /// and the weekdays and times of day they usually want it at.
 library;
 
+import '../../core/time_of_day_minutes.dart';
+import '../../core/time_window.dart';
+
 /// Sentinel used by [EventType.copyWith] to tell "leave [location]/[notes]
 /// unset" apart from "set it to null".
 const Object _unset = Object();
@@ -10,7 +13,7 @@ const Object _unset = Object();
 final class EventType {
   /// Creates an [EventType]. The invariants below are programmer errors,
   /// not user input mistakes — the Editor screen validates raw input with
-  /// [validateName], [validateDuration] and [validateWindow] first, and
+  /// [validateName], [validateDuration] and [validateWindows] first, and
   /// only builds an [EventType] once those pass.
   const EventType({
     required this.id,
@@ -19,8 +22,7 @@ final class EventType {
     this.location,
     this.notes,
     required this.preferredWeekdays,
-    required this.preferredStartMinutes,
-    required this.preferredEndMinutes,
+    required this.preferredWindows,
     required this.createdAt,
   }) : assert(
          name.length > 0 && name.length <= 40,
@@ -45,16 +47,8 @@ final class EventType {
          'preferredWeekdays must be non-empty',
        ),
        assert(
-         preferredStartMinutes >= 360 &&
-             preferredStartMinutes <= 1320 &&
-             preferredStartMinutes % 30 == 0,
-         'preferredStartMinutes must be 360..1320 and a multiple of 30',
-       ),
-       assert(
-         preferredEndMinutes > preferredStartMinutes + durationMinutes - 1 &&
-             preferredEndMinutes <= 1320,
-         'preferredEndMinutes must be > preferredStartMinutes + '
-         'durationMinutes - 1 and <= 1320',
+         preferredWindows.length > 0,
+         'preferredWindows must be non-empty',
        );
 
   final String id;
@@ -74,13 +68,18 @@ final class EventType {
   /// Subset of {1..7} (1 = Monday .. 7 = Sunday), non-empty.
   final Set<int> preferredWeekdays;
 
-  /// 360..1320, multiple of 30.
-  final int preferredStartMinutes;
-
-  /// > [preferredStartMinutes] + [durationMinutes] - 1, <= 1320.
-  final int preferredEndMinutes;
+  /// The times of day this card suits, in order. Non-empty; each window
+  /// starts on a 30-minute mark between 06:00 and 22:00 and is at least
+  /// [durationMinutes] long. More than one window means "any of these".
+  final List<TimeWindow> preferredWindows;
 
   final DateTime createdAt;
+
+  /// The start of the first preferred window.
+  int get preferredStartMinutes => preferredWindows.first.startMinutes;
+
+  /// The end of the last preferred window.
+  int get preferredEndMinutes => preferredWindows.last.endMinutes;
 
   /// Returns `Name is required.` for a blank name, or a message when it is
   /// too long, or `null` when [name] is valid. Trims before checking.
@@ -111,17 +110,35 @@ final class EventType {
     required int end,
     required int duration,
   }) {
-    if (start < 360 || start > 1320) {
+    if (start < dayStartMinutes || start > dayEndMinutes) {
       return 'Start must be between 06:00 and 22:00.';
     }
-    if (start % 30 != 0) {
+    if (start % slotMinutes != 0) {
       return 'Start must be on a 30 minute mark.';
     }
     if (end < start + duration) {
       return 'End must be after start plus the duration.';
     }
-    if (end > 1320) {
+    if (end > dayEndMinutes) {
       return 'End must be by 22:00.';
+    }
+    return null;
+  }
+
+  /// Returns the first problem among [windows], or `Add at least one time
+  /// window.` when there are none, or `null` when every window is valid.
+  static String? validateWindows({
+    required List<TimeWindow> windows,
+    required int duration,
+  }) {
+    if (windows.isEmpty) return 'Add at least one time window.';
+    for (final window in windows) {
+      final error = validateWindow(
+        start: window.startMinutes,
+        end: window.endMinutes,
+        duration: duration,
+      );
+      if (error != null) return error;
     }
     return null;
   }
@@ -133,8 +150,7 @@ final class EventType {
     Object? location = _unset,
     Object? notes = _unset,
     Set<int>? preferredWeekdays,
-    int? preferredStartMinutes,
-    int? preferredEndMinutes,
+    List<TimeWindow>? preferredWindows,
     DateTime? createdAt,
   }) {
     return EventType(
@@ -146,9 +162,7 @@ final class EventType {
           : location as String?,
       notes: identical(notes, _unset) ? this.notes : notes as String?,
       preferredWeekdays: preferredWeekdays ?? this.preferredWeekdays,
-      preferredStartMinutes:
-          preferredStartMinutes ?? this.preferredStartMinutes,
-      preferredEndMinutes: preferredEndMinutes ?? this.preferredEndMinutes,
+      preferredWindows: preferredWindows ?? this.preferredWindows,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -161,8 +175,7 @@ final class EventType {
       'location': location,
       'notes': notes,
       'preferredWeekdays': (preferredWeekdays.toList()..sort()),
-      'preferredStartMinutes': preferredStartMinutes,
-      'preferredEndMinutes': preferredEndMinutes,
+      'preferredWindows': preferredWindows.map((w) => w.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
     };
   }
@@ -180,16 +193,7 @@ final class EventType {
       location: json['location'] as String?,
       notes: json['notes'] as String?,
       preferredWeekdays: weekdaysRaw.map((e) => e as int).toSet(),
-      preferredStartMinutes: _require<int>(
-        json,
-        'preferredStartMinutes',
-        'EventType',
-      ),
-      preferredEndMinutes: _require<int>(
-        json,
-        'preferredEndMinutes',
-        'EventType',
-      ),
+      preferredWindows: _windowsFrom(json),
       createdAt: DateTime.parse(
         _require<String>(json, 'createdAt', 'EventType'),
       ),
@@ -205,8 +209,7 @@ final class EventType {
       other.location == location &&
       other.notes == notes &&
       _setEquals(other.preferredWeekdays, preferredWeekdays) &&
-      other.preferredStartMinutes == preferredStartMinutes &&
-      other.preferredEndMinutes == preferredEndMinutes &&
+      timeWindowListEquals(other.preferredWindows, preferredWindows) &&
       other.createdAt == createdAt;
 
   @override
@@ -217,14 +220,37 @@ final class EventType {
     location,
     notes,
     Object.hashAllUnordered(preferredWeekdays),
-    preferredStartMinutes,
-    preferredEndMinutes,
+    Object.hashAll(preferredWindows),
     createdAt,
   );
 
   @override
   String toString() =>
       'EventType(id: $id, name: $name, durationMinutes: $durationMinutes)';
+}
+
+/// Reads the preferred windows from [json], falling back to the single
+/// `preferredStartMinutes`/`preferredEndMinutes` pair written by versions
+/// before multiple windows existed.
+List<TimeWindow> _windowsFrom(Map<String, dynamic> json) {
+  final raw = json['preferredWindows'];
+  if (raw != null) {
+    if (raw is! List) {
+      throw const FormatException(
+        'Key "preferredWindows" in EventType JSON has the wrong type.',
+      );
+    }
+    return [
+      for (final entry in raw)
+        TimeWindow.fromJson(entry as Map<String, dynamic>),
+    ];
+  }
+  return [
+    TimeWindow(
+      startMinutes: _require<int>(json, 'preferredStartMinutes', 'EventType'),
+      endMinutes: _require<int>(json, 'preferredEndMinutes', 'EventType'),
+    ),
+  ];
 }
 
 bool _setEquals(Set<int> a, Set<int> b) {

@@ -39,12 +39,16 @@ class Timeline extends StatelessWidget {
         : switch (slot.state) {
             SlotState.available => SlotTileAppearance.available,
             SlotState.highlighted => SlotTileAppearance.highlighted,
-            SlotState.blocked => SlotTileAppearance.blocked,
+            SlotState.blocked =>
+              slot.blockReason == BlockReason.doesNotFit
+                  ? SlotTileAppearance.doesNotFit
+                  : SlotTileAppearance.blocked,
           };
     final reasonText = slot.state == SlotState.blocked
         ? switch (slot.blockReason!) {
             BlockReason.past => 'Past',
             BlockReason.outsideHours => 'Outside hours',
+            BlockReason.doesNotFit => 'Not enough room',
             BlockReason.conflict => slot.blockingTitle ?? 'Busy',
           }
         : null;
@@ -96,7 +100,7 @@ class Timeline extends StatelessWidget {
                 timeLabel: formatMinutes(slot.startMinutes),
                 appearance: appearance,
                 reasonText: reasonText,
-                onTap: appearance == SlotTileAppearance.blocked
+                onTap: slot.state == SlotState.blocked
                     ? null
                     : () => onToggle(coveringSelection ?? slot),
               ),

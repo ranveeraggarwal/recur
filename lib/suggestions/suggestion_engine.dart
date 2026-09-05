@@ -4,6 +4,7 @@ library;
 
 import '../core/local_date.dart';
 import '../core/time_of_day_minutes.dart';
+import '../core/time_window.dart';
 import '../data/models/booking.dart';
 import '../data/models/event_type.dart';
 import 'suggestion_window.dart';
@@ -13,12 +14,13 @@ import 'suggestion_window.dart';
 /// this filters to bookings with `start` before [now].
 ///
 /// With fewer than 3 past bookings, returns [eventType]'s stated preference
-/// unchanged. Otherwise the window is derived from the 3 most recent past
-/// bookings: the weekdays tied for the most common count among the three,
-/// and the time span from the earliest start-of-day minute to the latest
-/// end-of-day minute among them, padded by 30 minutes each side and clamped
-/// to 06:00-22:00. That window is kept even if it ends up smaller than
-/// [eventType]'s duration.
+/// unchanged, keeping every window it lists. Otherwise the window is
+/// derived from the 3 most recent past bookings: the weekdays tied for the
+/// most common count among the three, and the one time span from the
+/// earliest start-of-day minute to the latest end-of-day minute among
+/// them, padded by 30 minutes each side and clamped to 06:00-22:00. That
+/// window is kept even if it ends up smaller than [eventType]'s duration,
+/// and it replaces every window the card lists.
 SuggestionWindow suggestionWindowFor({
   required EventType eventType,
   required List<Booking> bookings,
@@ -30,8 +32,7 @@ SuggestionWindow suggestionWindowFor({
   if (past.length < 3) {
     return SuggestionWindow(
       weekdays: eventType.preferredWeekdays,
-      startMinutes: eventType.preferredStartMinutes,
-      endMinutes: eventType.preferredEndMinutes,
+      windows: List.of(eventType.preferredWindows),
     );
   }
 
@@ -71,7 +72,6 @@ SuggestionWindow suggestionWindowFor({
 
   return SuggestionWindow(
     weekdays: weekdays,
-    startMinutes: startMinutes,
-    endMinutes: endMinutes,
+    windows: [TimeWindow(startMinutes: startMinutes, endMinutes: endMinutes)],
   );
 }

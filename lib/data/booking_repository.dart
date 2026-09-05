@@ -6,6 +6,9 @@ import 'models/booking.dart';
 /// Reads and writes the booking list. See `docs/architecture.md`, section
 /// "Files, not a database".
 abstract interface class BookingRepository {
+  /// Every booking, sorted by [Booking.start] descending.
+  Future<List<Booking>> getAll();
+
   /// Bookings for [eventTypeId], sorted by [Booking.start] descending.
   Future<List<Booking>> getForEventType(String eventTypeId);
 
@@ -18,6 +21,10 @@ abstract interface class BookingRepository {
   /// Removes every booking for [eventTypeId]. Other cards' bookings are
   /// left alone.
   Future<void> deleteForEventType(String eventTypeId);
+
+  /// Removes the bookings whose [Booking.id] is in [bookingIds]. Ids that
+  /// are not stored are ignored.
+  Future<void> deleteByIds(Set<String> bookingIds);
 }
 
 /// [BookingRepository] backed by a [LocalStore]. Holds no in-memory
@@ -48,6 +55,13 @@ class LocalBookingRepository implements BookingRepository {
   Future<void> _writeAll(List<Booking> bookings) async {
     final encoded = jsonEncode(bookings.map((e) => e.toJson()).toList());
     await _store.write(_key, encoded);
+  }
+
+  @override
+  Future<List<Booking>> getAll() async {
+    final bookings = await _readAll();
+    bookings.sort((a, b) => b.start.compareTo(a.start));
+    return bookings;
   }
 
   @override
@@ -84,6 +98,16 @@ class LocalBookingRepository implements BookingRepository {
   Future<void> deleteForEventType(String eventTypeId) async {
     final bookings = await _readAll();
     bookings.removeWhere((b) => b.eventTypeId == eventTypeId);
+    await _writeAll(bookings);
+  }
+
+  @override
+  Future<void> deleteByIds(Set<String> bookingIds) async {
+    if (bookingIds.isEmpty) return;
+    final bookings = await _readAll();
+    final before = bookings.length;
+    bookings.removeWhere((b) => bookingIds.contains(b.id));
+    if (bookings.length == before) return;
     await _writeAll(bookings);
   }
 }

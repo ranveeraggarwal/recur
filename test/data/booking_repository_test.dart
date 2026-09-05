@@ -34,6 +34,53 @@ void main() {
       repository = LocalBookingRepository(store);
     });
 
+    test('getAll returns every booking, newest start first', () async {
+      await repository.add(
+        _sample(id: 'b1', eventTypeId: 'et1', start: DateTime(2026, 9, 1, 10)),
+      );
+      await repository.add(
+        _sample(id: 'b2', eventTypeId: 'et2', start: DateTime(2026, 9, 8, 10)),
+      );
+      await repository.add(
+        _sample(id: 'b3', eventTypeId: 'et1', start: DateTime(2026, 9, 4, 10)),
+      );
+
+      final all = await repository.getAll();
+
+      expect(all.map((b) => b.id), ['b2', 'b3', 'b1']);
+    });
+
+    test('getAll is empty when the store is empty', () async {
+      expect(await repository.getAll(), isEmpty);
+    });
+
+    test('deleteByIds removes only the named bookings', () async {
+      await repository.add(_sample(id: 'b1'));
+      await repository.add(_sample(id: 'b2'));
+      await repository.add(_sample(id: 'b3'));
+
+      await repository.deleteByIds({'b1', 'b3'});
+
+      expect((await repository.getAll()).map((b) => b.id), ['b2']);
+    });
+
+    test('deleteByIds ignores ids that are not stored', () async {
+      await repository.add(_sample(id: 'b1'));
+
+      await repository.deleteByIds({'nope'});
+
+      expect((await repository.getAll()).map((b) => b.id), ['b1']);
+    });
+
+    test('deleteByIds with an empty set writes nothing', () async {
+      await repository.add(_sample(id: 'b1'));
+      final before = await store.read('bookings');
+
+      await repository.deleteByIds(const {});
+
+      expect(await store.read('bookings'), before);
+    });
+
     test(
       'getForEventType returns an empty list when the store is empty',
       () async {

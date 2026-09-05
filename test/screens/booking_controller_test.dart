@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
 import 'package:recur/core/local_date.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/booking/booking_controller.dart';
 import 'package:recur/suggestions/slot_grid.dart';
@@ -14,8 +15,7 @@ EventType _ptSession() {
     name: 'PT session',
     durationMinutes: 60,
     preferredWeekdays: const {2, 4},
-    preferredStartMinutes: 540,
-    preferredEndMinutes: 720,
+    preferredWindows: [TimeWindow(startMinutes: 540, endMinutes: 720)],
     createdAt: DateTime(2020, 1, 1),
   );
 }
@@ -101,10 +101,14 @@ void main() {
       final at1100 = slots.firstWhere((s) => s.startMinutes == 660);
 
       expect(at930.state, SlotState.blocked);
-      expect(at930.blockReason, BlockReason.conflict);
-      expect(at930.blockingTitle, 'Dentist');
+      expect(at930.blockReason, BlockReason.doesNotFit);
+      expect(at930.blockingTitle, isNull);
       expect(at1000.state, SlotState.blocked);
+      expect(at1000.blockReason, BlockReason.conflict);
+      expect(at1000.blockingTitle, 'Dentist');
       expect(at1030.state, SlotState.blocked);
+      expect(at1030.blockReason, BlockReason.conflict);
+      expect(at1030.blockingTitle, 'Dentist');
       expect(at900.state, isNot(SlotState.blocked));
       expect(at1100.state, isNot(SlotState.blocked));
     });

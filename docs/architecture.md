@@ -34,9 +34,11 @@ Three ideas hold it together.
 
 **One door to the calendar.** Everything that touches the phone calendar
 goes through a small interface called `CalendarGateway`. It can check and
-ask for permission, list calendars you can write to, fetch busy times, and
-create one event. There is a fake version that lives in memory, and every
-screen and every test uses the fake. Only one file in the whole app,
+ask for permission, list calendars you can write to, fetch busy times,
+list whole events (for the Editor's `Copy from calendar`), say which event
+ids still exist, and create one event. It still never updates or deletes
+anything. There is a fake version that lives in memory, and every screen
+and every test uses the fake. Only one file in the whole app,
 `device_calendar_gateway.dart`, knows the plugin exists.
 
 **Wall-clock time, always.** An appointment is "Tuesday at ten", not an
@@ -55,11 +57,16 @@ Tests swap in an in-memory store.
 ## The data
 
 A **card** (`EventType`) has a name, a duration in minutes, an optional
-location and notes, the weekdays you prefer, and a start and end time.
+location and notes, the weekdays you prefer, and a non-empty list of
+`TimeWindow`s: the times of day that suit you, any one of which is enough
+for a slot to light up. Cards written before windows were a list are read
+back from the old `preferredStartMinutes`/`preferredEndMinutes` pair, so
+nothing on a phone needs migrating.
 
 A **booking** has the card it belongs to, a start and end, and the id of
-the calendar and event it was written to. Bookings are never edited; they
-disappear only when their card is deleted.
+the calendar and event it was written to. Bookings are never edited. They
+disappear when their card is deleted, or when the calendar event they
+point at does.
 
 **Settings** is one optional string: the chosen calendar id.
 
@@ -67,17 +74,38 @@ disappear only when their card is deleted.
 
 Two pure functions, no side effects, easy to test.
 
-`suggestionWindowFor` takes a card and its bookings and returns a window:
-a set of weekdays plus a start and end time. Fewer than three past
-bookings, it hands back the card's preference. Otherwise it takes the three
-most recent, picks the most common weekday (ties keep all), spans the
-earliest start to the latest end, pads by 30 minutes, and clamps to 06:00
-to 22:00.
+`suggestionWindowFor` takes a card and its bookings and returns a
+suggestion: a set of weekdays plus a list of time spans. Fewer than three
+past bookings, it hands back the card's preference, every window of it.
+Otherwise it takes the three most recent, picks the most common weekday
+(ties keep all), spans the earliest start to the latest end, pads by 30
+minutes, clamps to 06:00 to 22:00, and returns that one span in place of
+the card's list.
 
-`buildSlotGrid` takes a date, a duration, a window, the busy times, and
-"now", and returns the 32 slots of that day. Each slot is past, outside
-hours, a conflict, highlighted, or available, checked in exactly that
-order.
+`buildSlotGrid` takes a date, a duration, a suggestion, the busy times,
+and "now", and returns the 32 slots of that day. Each slot is past,
+outside hours, blocked by an overlap, highlighted, or available, checked
+in exactly that order. The set of blocked slots is the same as it always
+was — the appointment overlapping a busy interval — but a blocked slot
+now says which kind it is. `conflict` means an event covers the row's own
+30 minutes, and the row names it; `doesNotFit` means the row is free and
+only the appointment's tail runs into a later event. So an hour in the
+calendar greys the two rows it sits on, rather than every row an
+hour-long appointment could clash with.
+
+### Bookings that vanish from the calendar
+
+Recur writes an event and notes the booking, but the calendar belongs to
+the user and nothing tells the app when they delete something there.
+`pruneVanishedBookings` (`lib/data/booking_sync.dart`) closes the gap: on
+Home's load and on Booking's `init` it asks the gateway which of the
+booking event ids still exist and deletes the records that point at
+nothing. It checks each card's five most recent bookings only — the
+last-booked line reads one and the suggestion window reads three, so
+older records change nothing on screen and would cost a lookup each. It
+never throws, and it prunes nothing at all when the calendar cannot be
+read: no access is not the same as a deleted event, and guessing wrong
+would throw away history that cannot be got back.
 
 ## The screens
 
@@ -114,17 +142,21 @@ completes, so loading them in the test body hangs until it times out.
 | Time | Local wall-clock. Minutes since midnight. `LocalDate.at`. |
 | "Past bookings" | Start is before now. The three most recent count. |
 | Window padding | 30 minutes each side, clamped to 06:00 to 22:00. Too-small windows are kept. |
-| Slot precedence | Past, outside hours, conflict, highlighted, available. |
+| Slot precedence | Past, outside hours, overlap, highlighted, available. |
+| Blocked kinds | An overlap is a `conflict` when an event covers the row's own 30 minutes (and the row names it), else `doesNotFit` (`Not enough room`, on the plain surface, still not tappable). |
 | Conflicts | Every calendar. All-day and free events never block. Half-open overlap. |
 | Plugin use | Create events only. Never update or delete. |
 | Calendar choice | Stored id if still writable, else the only writable one, else ask. |
 | Deleting a card | Removes its bookings in Recur. The calendar is untouched. |
+| Deleting an event in the calendar | Its booking is dropped from Recur on the next Home or Booking load. Five most recent per card are checked. A calendar that cannot be read prunes nothing. |
+| Preferred times | A non-empty list. Any window is enough for a slot to light up; each is validated on its own, and overlapping ones are allowed. |
+| Prefilling a card | `Copy from calendar` groups the last 90 days and next 30 days of events by title, newest first, at most 30 of them. All-day, untitled, and events under 5 or over 480 minutes are skipped. |
 | Goldens | 380 px, DPR 1, Outfit, generated on Linux. |
 | Formatting | Hand-written English. No `intl`. |
 | Ids | 32 hex characters from a secure random. |
 | Confirm order | Calendar event first, booking log second. |
 | Weeks | Monday to Sunday. You cannot go back before this week. |
-| Editor defaults | 60 min, Mon to Fri, 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |
+| Editor defaults | 60 min, Mon to Fri, one window of 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |
 | Outfit font | Google Fonts ships Outfit only as a variable font, so the three static weights are instanced from it at 400, 500 and 600 with fontTools and vendored under `assets/fonts`. |
 | `formatLastBooked` signature | `Booking` does not exist yet, so it takes `{required DateTime? latestStart, required DateTime now}` instead of `(Booking? latest, DateTime now)`. |
 | `formatSlotSummary` signature | `Slot` does not exist yet, so `core/formatting.dart` provides `formatDaySpan({required LocalDate date, required int startMinutes, required int endMinutes})` instead. |
@@ -158,3 +190,9 @@ completes, so loading them in the test body hangs until it times out.
 | `DeviceCalendarGateway.createEvent` wrapped-exception message | The issue's mapping table says to "wrap `DeviceCalendarException` and `PlatformException` in `CalendarWriteException`" but not what message to surface. `DeviceCalendarException` already carries a human-readable `message`, so that's passed straight through with the original exception as `cause`. `PlatformException` has no non-nullable message, so a plain fallback ("Failed to create calendar event.") is used when `e.message` is null, again with the original exception as `cause`. |
 | `buildDependencies` location | The issue offers `lib/main.dart` or `lib/bootstrap.dart` for the extracted factory. Kept it in `lib/main.dart`, next to `main()`: the function is small, it is the only caller besides the new test, and a separate `bootstrap.dart` would just be one more file to keep in sync for no real gain in testability. |
 | Release keystore path in `key.properties` | The issue names the four `key.properties` fields but not where the keystore file itself lives. `storeFile` is resolved with Gradle's `file()` from `android/app/build.gradle.kts`, so it is relative to `android/app` (matching the standard Flutter release-signing convention). CI writes the decoded keystore to `android/app/upload-keystore.jks` and `storeFile=upload-keystore.jks` in the properties it writes; a local `key.properties` can instead give an absolute path. |
+| `EventType`'s `preferredWindows` vs. the old pair | `EventType` keeps `preferredStartMinutes`/`preferredEndMinutes` as getters over the first and last window, so the Editor and the tests that only care about one window read the same as before, but `toJson` writes only `preferredWindows` and `fromJson` falls back to the old pair when the new key is absent. |
+| `TimeWindow`'s home | `lib/core/time_window.dart`, next to `LocalDate` and `time_of_day_minutes.dart`, rather than under `data/models/`: both the data layer (`EventType`) and the suggestion layer (`SuggestionWindow`) need it, and `core/` is the one place both already import. |
+| Which bookings the prune checks | Five per card. `latestForEventType` reads one and `suggestionWindowFor` reads three, so five leaves slack without turning a long history into one `getEvent` call per record on every Home load. Older records are left in the file: they change nothing on screen, and each prune moves the window along anyway. |
+| `FakeCalendarGateway.existingEventIds` fidelity | The fake reports an id as existing only when it created it, holds it in `events`, or was told about it through `knownEventIds`, matching the real gateway rather than assuming the best. A test that writes a booking straight to the repository therefore has to seed `knownEventIds`, which is the point: forgetting to is exactly the state this feature detects. |
+| Where the prefill logic lives | `prefillsFromEvents` is a pure function in `lib/screens/editor/event_prefill.dart`, so the grouping, rounding and clamping are unit-tested without a widget; `prefill_sheet.dart` only reads the calendar and draws rows. |
+| `Copy from calendar` on an existing card | Offered on a new card only. Prefilling replaces every field, which on an edit would quietly throw away what the user already has. |

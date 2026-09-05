@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
+import 'package:recur/calendar/calendar_gateway.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/editor/editor_screen.dart';
 import 'package:recur/theme/app_theme.dart';
@@ -16,11 +18,18 @@ EventType _ptSession() {
     durationMinutes: 60,
     location: 'Kungsholmen',
     preferredWeekdays: const {1, 3, 5},
-    preferredStartMinutes: 480,
-    preferredEndMinutes: 1080,
+    preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
     createdAt: DateTime(2026, 1, 1),
   );
 }
+
+/// The times the Start/End dropdowns actually show, read off the form
+/// fields rather than the controller, so a field left holding a stale
+/// value is caught.
+List<int?> _dropdownValues(WidgetTester tester) => tester
+    .stateList<FormFieldState<int>>(find.byType(DropdownButtonFormField<int>))
+    .map((state) => state.value)
+    .toList();
 
 Future<void> _pumpEditor(
   WidgetTester tester,
@@ -174,6 +183,160 @@ void main() {
     expect(await testDeps.deps.eventTypes.getById('et-1'), isNotNull);
   });
 
+  group('preferred times', () {
+    testWidgets('Add a time adds a start and end pair', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      await _pumpEditor(tester, testDeps);
+
+      expect(find.text('Start'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Add a time'));
+      await tester.tap(find.text('Add a time'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start'), findsNWidgets(2));
+      expect(find.text('End'), findsNWidgets(2));
+    });
+
+    testWidgets('the remove button appears only with more than one time', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      await _pumpEditor(tester, testDeps);
+
+      expect(find.byTooltip('Remove this time'), findsNothing);
+
+      await tester.ensureVisible(find.text('Add a time'));
+      await tester.tap(find.text('Add a time'));
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Remove this time'), findsNWidgets(2));
+
+      await tester.tap(find.byTooltip('Remove this time').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start'), findsOneWidget);
+      expect(find.byTooltip('Remove this time'), findsNothing);
+      // The row left behind shows the second window's times, not the
+      // removed row's.
+      expect(_dropdownValues(tester), [1080, 1140]);
+    });
+
+    testWidgets('both times are saved on the card', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      await _pumpEditor(tester, testDeps);
+
+      await tester.enterText(find.byType(TextField).first, 'PT session');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Add a time'));
+      await tester.tap(find.text('Add a time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ConfirmButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final saved = (await testDeps.deps.eventTypes.getAll()).single;
+      expect(saved.preferredWindows, hasLength(2));
+    });
+  });
+
+  group('copy from calendar', () {
+    void seedPhysio(TestDeps testDeps) {
+      testDeps.calendar.events.add(
+        CalendarEvent(
+          id: 'evt-9',
+          calendarId: 'cal-1',
+          title: 'Physio',
+          start: DateTime(2026, 9, 1, 10),
+          end: DateTime(2026, 9, 1, 10, 45),
+          isAllDay: false,
+          location: 'Vasastan',
+          notes: 'Bring the referral',
+        ),
+      );
+    }
+
+    testWidgets('the button is offered on a new card', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      await _pumpEditor(tester, testDeps);
+
+      expect(find.text('Copy from calendar'), findsOneWidget);
+    });
+
+    testWidgets('the button is not offered when editing a card', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      await testDeps.deps.eventTypes.upsert(_ptSession());
+      await _pumpEditor(tester, testDeps, eventTypeId: 'et-1');
+
+      expect(find.text('Copy from calendar'), findsNothing);
+    });
+
+    testWidgets('picking an event fills the form in', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      seedPhysio(testDeps);
+      await _pumpEditor(tester, testDeps);
+
+      await tester.tap(find.text('Copy from calendar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('45 min · Tue 1 Sep · Vasastan'), findsOneWidget);
+      await tester.tap(find.text('Physio'));
+      await tester.pumpAndSettle();
+
+      final nameField = tester.widget<TextField>(find.byType(TextField).first);
+      expect(nameField.controller!.text, 'Physio');
+      expect(find.text('Bring the referral'), findsOneWidget);
+      expect(find.text('Vasastan'), findsOneWidget);
+      expect(_dropdownValues(tester), [600, 660]);
+
+      await tester.tap(find.widgetWithText(ConfirmButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final saved = (await testDeps.deps.eventTypes.getAll()).single;
+      expect(saved.name, 'Physio');
+      expect(saved.durationMinutes, 45);
+      expect(saved.location, 'Vasastan');
+      expect(saved.notes, 'Bring the referral');
+      expect(saved.preferredWeekdays, {2});
+      expect(saved.preferredWindows, [
+        const TimeWindow(startMinutes: 600, endMinutes: 660),
+      ]);
+    });
+
+    testWidgets('an empty calendar says so', (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await _pumpEditor(tester, testDeps);
+
+      await tester.tap(find.text('Copy from calendar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nothing in your calendar to copy.'), findsOneWidget);
+    });
+
+    testWidgets('without calendar access it says so too', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      seedPhysio(testDeps);
+      testDeps.calendar.access = CalendarAccess.denied;
+      await _pumpEditor(tester, testDeps);
+
+      await tester.tap(find.text('Copy from calendar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nothing in your calendar to copy.'), findsOneWidget);
+    });
+  });
+
   group('goldens', () {
     testWidgets('editor_new', (WidgetTester tester) async {
       final testDeps = buildTestDeps();
@@ -236,6 +399,22 @@ void main() {
       await tester.pumpAndSettle();
 
       await expectGolden(tester, 'editor_custom_duration');
+    });
+
+    testWidgets('editor_two_times', (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await pumpGolden(
+        tester,
+        AppScope(deps: testDeps.deps, child: const EditorScreen()),
+        height: 900,
+        scaffold: false,
+      );
+
+      await tester.ensureVisible(find.text('Add a time'));
+      await tester.tap(find.text('Add a time'));
+      await tester.pumpAndSettle();
+
+      await expectGolden(tester, 'editor_two_times');
     });
 
     testWidgets('editor_delete_dialog', (WidgetTester tester) async {

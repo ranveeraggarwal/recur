@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 
 EventType _sample({
@@ -10,8 +11,9 @@ EventType _sample({
   String? location = 'Kungsholmen',
   String? notes,
   Set<int> preferredWeekdays = const {1, 3, 5},
-  int preferredStartMinutes = 480,
-  int preferredEndMinutes = 1080,
+  List<TimeWindow> preferredWindows = const [
+    TimeWindow(startMinutes: 480, endMinutes: 1080),
+  ],
   DateTime? createdAt,
 }) {
   return EventType(
@@ -21,8 +23,7 @@ EventType _sample({
     location: location,
     notes: notes,
     preferredWeekdays: preferredWeekdays,
-    preferredStartMinutes: preferredStartMinutes,
-    preferredEndMinutes: preferredEndMinutes,
+    preferredWindows: preferredWindows,
     createdAt: createdAt ?? DateTime(2026, 9, 4, 10, 0),
   );
 }
@@ -35,8 +36,8 @@ void main() {
       const expected =
           '{"id":"abc123","name":"PT session","durationMinutes":60,'
           '"location":"Kungsholmen","notes":null,'
-          '"preferredWeekdays":[1,3,5],"preferredStartMinutes":480,'
-          '"preferredEndMinutes":1080,'
+          '"preferredWeekdays":[1,3,5],'
+          '"preferredWindows":[{"startMinutes":480,"endMinutes":1080}],'
           '"createdAt":"2026-09-04T10:00:00.000"}';
 
       expect(jsonEncode(eventType.toJson()), expected);
@@ -53,7 +54,7 @@ void main() {
       expect(eventType.toJson()['preferredWeekdays'], [1, 3, 5]);
     });
 
-    test('fromJson parses the literal excerpt sample', () {
+    test('fromJson reads the pre-multiple-windows shape', () {
       const source =
           '{"id":"...","name":"PT session","durationMinutes":60,'
           '"location":"Kungsholmen","notes":null,'
@@ -74,6 +75,23 @@ void main() {
       expect(eventType.preferredStartMinutes, 480);
       expect(eventType.preferredEndMinutes, 1080);
       expect(eventType.createdAt, DateTime(2026, 9, 4, 10, 0));
+      expect(eventType.preferredWindows, [
+        const TimeWindow(startMinutes: 480, endMinutes: 1080),
+      ]);
+    });
+
+    test('every window survives the round trip', () {
+      final eventType = _sample(
+        preferredWindows: const [
+          TimeWindow(startMinutes: 420, endMinutes: 540),
+          TimeWindow(startMinutes: 960, endMinutes: 1140),
+        ],
+      );
+      final decoded = EventType.fromJson(
+        jsonDecode(jsonEncode(eventType.toJson())) as Map<String, dynamic>,
+      );
+      expect(decoded.preferredWindows, eventType.preferredWindows);
+      expect(decoded, eventType);
     });
   });
 
@@ -148,8 +166,7 @@ void main() {
         location: 'Vasastan',
         notes: 'Bring insurance card',
         preferredWeekdays: {2, 4},
-        preferredStartMinutes: 540,
-        preferredEndMinutes: 1020,
+        preferredWindows: [TimeWindow(startMinutes: 540, endMinutes: 1020)],
         createdAt: createdAt,
       );
 

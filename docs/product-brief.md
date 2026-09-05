@@ -31,17 +31,29 @@ A card shows the name, how long it takes, where it is, and a line like
 edit. An empty Home says `No events yet.` and, quietly, `Tap + to add one.`
 
 **Editor** is a plain form: name, duration (`30 min`, `45 min`, `60 min`,
-`90 min`, or `Custom`), location, notes, which weekdays suit you, and a
-time window between 06:00 and 22:00. Defaults are 60 minutes, Monday to
-Friday, 08:00 to 18:00. Save stays grey until the form makes sense. Delete
-warns you: `Delete "PT session"? Past bookings are removed from Recur.
-Calendar events are not touched.`
+`90 min`, or `Custom`), location, notes, which weekdays suit you, and the
+times of day that suit you, between 06:00 and 22:00. One time is enough,
+but `Add a time` gives you another, so a card can want mornings and late
+afternoons and nothing in between; each extra one has an × to take it
+away again. Defaults are 60 minutes, Monday to Friday, 08:00 to 18:00.
+Save stays grey until the form makes sense. Delete warns you:
+`Delete "PT session"? Past bookings are removed from Recur. Calendar
+events are not touched.`
+
+A new card starts with `Copy from calendar`. It opens a sheet of the
+events already in your calendar, one row per name, newest first, and
+filling in the name, how long it takes, where it is, the notes, the
+weekdays it has fallen on, and the times of day it has run at. Everything
+it fills in, you can change.
 
 **Booking** is the week view. Seven day pills across the top, a timeline of
 30-minute slots down the page from 06:00 to 22:00, and a Confirm bar
 stuck to the bottom. Busy slots are greyed out and tell you why: the event
-name, `Busy`, `Past`, or `Outside hours`. Good slots have a warm cedar edge.
-Tap one and the bar reads `Tue 8 Sep, 10:00 to 11:00`.
+name, `Busy`, `Past`, or `Outside hours`. An hour in your calendar greys
+the two rows it actually covers, no more. A row that is free itself but
+too close to the next event stays sand-white, says `Not enough room`, and
+does not respond. Good slots have a warm cedar edge. Tap one and the bar
+reads `Tue 8 Sep, 10:00 to 11:00`.
 
 If Recur cannot see the calendar yet, the timeline gives way to a short
 message and one button: `Allow calendar access`, or `Open settings` if the
@@ -61,10 +73,13 @@ Two simple rules, no cleverness.
 
 A slot is **blocked** if it is already in the past, if the appointment
 would overlap anything in any of your calendars, or if it would run past
-22:00. Blocked always wins.
+22:00. Blocked always wins. A blocked slot names the event when the event
+covers that half hour, and reads `Not enough room` when the clash is only
+because the appointment would run on into it.
 
 A slot is **highlighted** if it sits inside a window. Until you have
-booked a card three times, the window is what you typed into the Editor.
+booked a card three times, the windows are the ones you typed into the
+Editor, and any one of them is enough.
 After that, Recur looks at your last three bookings: the weekday you use
 most (ties keep both), and the earliest start to the latest finish, with
 half an hour of slack on each side. The whole appointment has to fit inside
@@ -72,6 +87,12 @@ the window to light up.
 
 All-day events and events marked "free" do not block. An event that ends at
 10:00 does not block a slot that starts at 10:00.
+
+Your calendar is yours, and you can delete an event Recur wrote. When
+Recur next opens, a booking whose event has gone is quietly forgotten:
+the card stops saying it is booked, and the suggestions stop counting it.
+If Recur cannot read the calendar at that moment it changes nothing and
+tries again next time.
 
 ## How it talks
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/booking.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/home/home_screen.dart';
@@ -24,8 +25,7 @@ EventType _eventType({
     durationMinutes: durationMinutes,
     location: location,
     preferredWeekdays: const {1, 2, 3, 4, 5},
-    preferredStartMinutes: 480,
-    preferredEndMinutes: 1080,
+    preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
     createdAt: createdAt ?? DateTime(2026, 1, 1),
   );
 }
@@ -44,6 +44,13 @@ Booking _booking({
     calendarEventId: 'evt-$id',
     createdAt: start,
   );
+}
+
+/// Adds a booking and tells the fake calendar its event is still there, so
+/// Home does not prune the booking as one whose event was deleted.
+Future<void> _addBooking(TestDeps testDeps, Booking booking) async {
+  await testDeps.deps.bookings.add(booking);
+  testDeps.calendar.knownEventIds.add(booking.calendarEventId);
 }
 
 Future<void> _pumpHome(WidgetTester tester, TestDeps testDeps) async {
@@ -90,7 +97,8 @@ void main() {
           createdAt: DateTime(2026, 1, 2),
         ),
       );
-      await testDeps.deps.bookings.add(
+      await _addBooking(
+        testDeps,
         _booking(
           id: 'b-1',
           eventTypeId: 'et-1',
@@ -119,7 +127,8 @@ void main() {
     await testDeps.deps.eventTypes.upsert(
       _eventType(id: 'et-1', name: 'PT session'),
     );
-    await testDeps.deps.bookings.add(
+    await _addBooking(
+      testDeps,
       _booking(
         id: 'b-1',
         eventTypeId: 'et-1',
@@ -164,6 +173,53 @@ void main() {
     final testDeps = buildTestDeps();
     await _pumpHome(tester, testDeps);
     expect(find.byIcon(Icons.calendar_today_outlined), findsNothing);
+  });
+
+  testWidgets('a booking whose calendar event was deleted stops counting', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    await testDeps.deps.eventTypes.upsert(
+      _eventType(id: 'et-1', name: 'PT session'),
+    );
+    // Seeded without telling the fake calendar about the event, which is
+    // what a booking whose event the user deleted looks like.
+    await testDeps.deps.bookings.add(
+      _booking(
+        id: 'b-1',
+        eventTypeId: 'et-1',
+        start: DateTime(2026, 8, 17, 10),
+      ),
+    );
+
+    await _pumpHome(tester, testDeps);
+
+    final card = tester.widget<EventCard>(find.byType(EventCard));
+    expect(card.lastBookedText, 'Not booked yet');
+    expect(await testDeps.deps.bookings.getForEventType('et-1'), isEmpty);
+  });
+
+  testWidgets('bookings are kept when the calendar cannot be read', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    testDeps.calendar.access = CalendarAccess.denied;
+    await testDeps.deps.eventTypes.upsert(
+      _eventType(id: 'et-1', name: 'PT session'),
+    );
+    await testDeps.deps.bookings.add(
+      _booking(
+        id: 'b-1',
+        eventTypeId: 'et-1',
+        start: DateTime(2026, 8, 17, 10),
+      ),
+    );
+
+    await _pumpHome(tester, testDeps);
+
+    final card = tester.widget<EventCard>(find.byType(EventCard));
+    expect(card.lastBookedText, 'Last booked 3 weeks ago');
+    expect(await testDeps.deps.bookings.getForEventType('et-1'), hasLength(1));
   });
 
   testWidgets('the calendar icon appears with two or more writable calendars', (
@@ -245,7 +301,8 @@ void main() {
           createdAt: DateTime(2026, 1, 2),
         ),
       );
-      await testDeps.deps.bookings.add(
+      await _addBooking(
+        testDeps,
         _booking(
           id: 'b-1',
           eventTypeId: 'et-1',

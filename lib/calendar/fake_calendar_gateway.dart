@@ -50,8 +50,8 @@ final class CreatedEvent {
 ///
 /// Tests poke the fields directly rather than going through a constructor:
 /// set [access] or [accessAfterRequest] to steer permission behaviour, seed
-/// [calendars] or [busy], or set [failNextCreateWith] to make the next
-/// [createEvent] call fail.
+/// [calendars], [busy], [events] or [knownEventIds], or set
+/// [failNextCreateWith] to make the next [createEvent] call fail.
 class FakeCalendarGateway implements CalendarGateway {
   /// What [checkAccess] returns, and the starting permission state.
   CalendarAccess access = CalendarAccess.granted;
@@ -74,6 +74,16 @@ class FakeCalendarGateway implements CalendarGateway {
   /// Busy intervals returned by [busyIntervals], in addition to one per
   /// entry in [created].
   final List<BusyInterval> busy = [];
+
+  /// Events returned by [listEvents], in addition to one per entry in
+  /// [created].
+  final List<CalendarEvent> events = [];
+
+  /// Event ids [existingEventIds] treats as still in the calendar, on top
+  /// of everything in [created] and [events]. Seed it from a test that
+  /// writes a booking straight to the repository, so the app does not read
+  /// the booking as pointing at a deleted event.
+  final Set<String> knownEventIds = {};
 
   /// Every `(from, to)` pair [busyIntervals] was called with, in order.
   final List<({DateTime from, DateTime to})> busyQueries = [];
@@ -134,6 +144,55 @@ class FakeCalendarGateway implements CalendarGateway {
           ..sort((a, b) => a.start.compareTo(b.start));
 
     return overlapping;
+  }
+
+  @override
+  Future<List<CalendarEvent>> listEvents({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    if (access != CalendarAccess.granted) {
+      throw StateError('listEvents requires access == granted.');
+    }
+
+    final all = [
+      ...events,
+      for (final event in created)
+        CalendarEvent(
+          id: event.id,
+          calendarId: event.calendarId,
+          title: event.title,
+          start: event.start,
+          end: event.end,
+          isAllDay: false,
+          location: event.location,
+          notes: event.notes,
+        ),
+    ];
+
+    final overlapping =
+        all
+            .where(
+              (event) => event.start.isBefore(to) && event.end.isAfter(from),
+            )
+            .toList()
+          ..sort((a, b) => a.start.compareTo(b.start));
+
+    return overlapping;
+  }
+
+  @override
+  Future<Set<String>> existingEventIds(Set<String> eventIds) async {
+    if (access != CalendarAccess.granted) {
+      throw StateError('existingEventIds requires access == granted.');
+    }
+
+    final known = {
+      ...knownEventIds,
+      ...events.map((e) => e.id),
+      ...created.map((e) => e.id),
+    };
+    return eventIds.where(known.contains).toSet();
   }
 
   @override
