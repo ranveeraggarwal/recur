@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/core/local_date.dart';
 import 'package:recur/core/time_of_day_minutes.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/booking.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/suggestions/suggestion_engine.dart';
@@ -37,8 +38,12 @@ EventType card({
     name: 'PT session',
     durationMinutes: durationMinutes,
     preferredWeekdays: preferredWeekdays,
-    preferredStartMinutes: preferredStartMinutes,
-    preferredEndMinutes: preferredEndMinutes,
+    preferredWindows: [
+      TimeWindow(
+        startMinutes: preferredStartMinutes,
+        endMinutes: preferredEndMinutes,
+      ),
+    ],
     createdAt: DateTime(2026, 1, 1),
   );
 }
@@ -49,8 +54,7 @@ void main() {
 
   final preference = SuggestionWindow(
     weekdays: const {1, 3, 5},
-    startMinutes: 480,
-    endMinutes: 1080,
+    windows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
   );
 
   test('no bookings -> preference window', () {
@@ -93,7 +97,10 @@ void main() {
 
     expect(
       window,
-      SuggestionWindow(weekdays: const {2}, startMinutes: 510, endMinutes: 720),
+      SuggestionWindow(
+        weekdays: const {2},
+        windows: [TimeWindow(startMinutes: 510, endMinutes: 720)],
+      ),
     );
   });
 
@@ -134,7 +141,10 @@ void main() {
 
     expect(
       window,
-      SuggestionWindow(weekdays: const {2}, startMinutes: 510, endMinutes: 720),
+      SuggestionWindow(
+        weekdays: const {2},
+        windows: [TimeWindow(startMinutes: 510, endMinutes: 720)],
+      ),
     );
   });
 
@@ -190,8 +200,7 @@ void main() {
       window,
       SuggestionWindow(
         weekdays: const {1, 2, 4},
-        startMinutes: 450,
-        endMinutes: 690,
+        windows: [TimeWindow(startMinutes: 450, endMinutes: 690)],
       ),
     );
   });
@@ -209,7 +218,7 @@ void main() {
       now: now,
     );
 
-    expect(window.startMinutes, 360);
+    expect(window.windows.single.startMinutes, 360);
   });
 
   test('padding clamps at 22:00', () {
@@ -225,7 +234,7 @@ void main() {
       now: now,
     );
 
-    expect(window.endMinutes, 1320);
+    expect(window.windows.single.endMinutes, 1320);
   });
 
   test(
@@ -248,8 +257,7 @@ void main() {
         window,
         SuggestionWindow(
           weekdays: const {2},
-          startMinutes: 510,
-          endMinutes: 1320,
+          windows: [TimeWindow(startMinutes: 510, endMinutes: 1320)],
         ),
       );
     },
@@ -268,9 +276,10 @@ void main() {
       now: now,
     );
 
-    expect(window.startMinutes, 390);
-    expect(window.endMinutes, 480);
-    expect(window.endMinutes - window.startMinutes, lessThan(120));
+    final span = window.windows.single;
+    expect(span.startMinutes, 390);
+    expect(span.endMinutes, 480);
+    expect(span.endMinutes - span.startMinutes, lessThan(120));
   });
 
   test('booking exactly at now is not past', () {

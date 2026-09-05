@@ -70,7 +70,9 @@ slots here".
 sand-white. Highlighted has an 8% cedar wash and a 3 px cedar edge on the
 left. Selected is solid green with light text. Blocked is flat `blocked`
 grey with a muted reason on the right: the event's name, `Busy`, `Past`, or
-`Outside hours`. Blocked tiles do not react to touch.
+`Outside hours`, and only on the rows the event really covers. A row that
+is free itself but has no room for the appointment keeps the sand-white
+surface, goes muted, and reads `Not enough room`. Neither reacts to touch.
 
 **Confirm button.** Full width, 52 px, green, rounded 12 px. Disabled is
 `blocked` grey with muted text. While working it shows a small spinner
@@ -88,14 +90,21 @@ light plus sign and the fab shadow.
 **Sheets.** Sand-white, 20 px top corners, a small grey handle, 24 px
 padding. The confirmation sheet is a green check, `Booked`, the slot, and
 the card name. The calendar picker is `Write bookings to` and one 56 px row
-per calendar, with a green check on the chosen one.
+per calendar, with a green check on the chosen one. The prefill sheet is
+`Copy from calendar` and one 56 px row per event name, the name over a
+muted line of `45 min · Tue 1 Sep · Vasastan`; with nothing to offer it
+says `Nothing in your calendar to copy.` instead.
 
 ## Screens at 380 px
 
 Home: a 56 px app bar with `Recur` in display size, 16 px margins, cards
 166 px wide, plus button bottom right. Editor: 24 px between groups, Save
-pinned at the bottom. Booking: a 72 px week header (`Week of 7 Sep` with
-44 px chevrons), the day strip, a hairline, the timeline, the confirm bar.
+pinned at the bottom. Its `Preferred times` group is one row per window —
+two `Start`/`End` fields side by side, with a muted × after them once
+there is more than one — over a green `Add a time` text button. A new
+card carries a green `Copy from calendar` text button above the name.
+Booking: a 72 px week header (`Week of 7 Sep` with 44 px chevrons), the
+day strip, a hairline, the timeline, the confirm bar.
 Access messages sit centred in body text with a content-sized button below.
 
 ## Words

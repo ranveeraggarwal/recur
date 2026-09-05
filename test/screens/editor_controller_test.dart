@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/editor/editor_controller.dart';
+import 'package:recur/screens/editor/event_prefill.dart';
 
 import '../helpers/fakes.dart';
 
@@ -14,8 +16,9 @@ void main() {
       expect(controller.isNew, isTrue);
       expect(controller.durationMinutes, 60);
       expect(controller.weekdays, {1, 2, 3, 4, 5});
-      expect(controller.startMinutes, 480);
-      expect(controller.endMinutes, 1080);
+      expect(controller.windows, [
+        const TimeWindow(startMinutes: 480, endMinutes: 1080),
+      ]);
       expect(controller.isValid, isFalse);
     });
 
@@ -51,8 +54,8 @@ void main() {
       final controller = EditorController(deps: testDeps.deps);
       await controller.load();
 
-      controller.setStartMinutes(1080);
-      controller.setEndMinutes(1100);
+      controller.setWindowStart(0, 1080);
+      controller.setWindowEnd(0, 1100);
       expect(
         controller.windowError,
         'End must be after start plus the duration.',
@@ -76,6 +79,156 @@ void main() {
         expect(controller.isValid, isFalse);
       },
     );
+  });
+
+  group('preferred times', () {
+    test('addWindow appends a window after the last one', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+
+      controller.addWindow();
+
+      expect(controller.windows, [
+        const TimeWindow(startMinutes: 480, endMinutes: 1080),
+        const TimeWindow(startMinutes: 1080, endMinutes: 1140),
+      ]);
+      expect(controller.windowError, isNull);
+    });
+
+    test('an added window is pulled back to fit before 22:00', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+      controller.setWindowEnd(0, 1320);
+
+      controller.addWindow();
+
+      expect(
+        controller.windows.last,
+        const TimeWindow(startMinutes: 1260, endMinutes: 1320),
+      );
+      expect(controller.windowError, isNull);
+    });
+
+    test('setWindowStart and setWindowEnd change one window only', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+      controller.addWindow();
+
+      controller.setWindowStart(0, 420);
+      controller.setWindowEnd(0, 600);
+
+      expect(
+        controller.windows.first,
+        const TimeWindow(startMinutes: 420, endMinutes: 600),
+      );
+      expect(
+        controller.windows.last,
+        const TimeWindow(startMinutes: 1080, endMinutes: 1140),
+      );
+    });
+
+    test('removeWindow drops it, but never the last one', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+      controller.addWindow();
+
+      controller.removeWindow(0);
+      expect(controller.windows, [
+        const TimeWindow(startMinutes: 1080, endMinutes: 1140),
+      ]);
+
+      controller.removeWindow(0);
+      expect(controller.windows, hasLength(1));
+    });
+
+    test('windowError reports the first broken window', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+      controller.addWindow();
+      controller.setWindowEnd(1, 1085);
+
+      expect(
+        controller.windowError,
+        'End must be after start plus the duration.',
+      );
+      expect(controller.isValid, isFalse);
+    });
+
+    test('every window is saved', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+      controller.setName('PT session');
+      controller.setWindowStart(0, 420);
+      controller.setWindowEnd(0, 600);
+      controller.addWindow();
+
+      await controller.save();
+
+      final saved = (await testDeps.deps.eventTypes.getAll()).single;
+      expect(saved.preferredWindows, [
+        const TimeWindow(startMinutes: 420, endMinutes: 600),
+        const TimeWindow(startMinutes: 600, endMinutes: 660),
+      ]);
+    });
+  });
+
+  group('applyPrefill', () {
+    test('fills the whole draft in from a calendar event', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+
+      controller.applyPrefill(
+        EventPrefill(
+          name: 'Physio',
+          durationMinutes: 45,
+          location: 'Vasastan',
+          notes: 'Bring the referral',
+          weekdays: const {2, 4},
+          windows: const [TimeWindow(startMinutes: 600, endMinutes: 720)],
+          latestStart: DateTime(2026, 9, 8, 10),
+          occurrences: 3,
+        ),
+      );
+
+      expect(controller.name, 'Physio');
+      expect(controller.durationMinutes, 45);
+      expect(controller.isCustomDuration, isFalse);
+      expect(controller.location, 'Vasastan');
+      expect(controller.notes, 'Bring the referral');
+      expect(controller.weekdays, {2, 4});
+      expect(controller.windows, [
+        const TimeWindow(startMinutes: 600, endMinutes: 720),
+      ]);
+      expect(controller.isValid, isTrue);
+    });
+
+    test('a duration off the presets switches to Custom', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+      await controller.load();
+
+      controller.applyPrefill(
+        EventPrefill(
+          name: 'Physio',
+          durationMinutes: 50,
+          weekdays: const {2},
+          windows: const [TimeWindow(startMinutes: 600, endMinutes: 720)],
+          latestStart: DateTime(2026, 9, 8, 10),
+          occurrences: 1,
+        ),
+      );
+
+      expect(controller.isCustomDuration, isTrue);
+      expect(controller.customDurationText, '50');
+      expect(controller.durationError, isNull);
+    });
   });
 
   group('save', () {
@@ -105,8 +258,7 @@ void main() {
         name: 'PT session',
         durationMinutes: 60,
         preferredWeekdays: const {1, 2, 3, 4, 5},
-        preferredStartMinutes: 480,
-        preferredEndMinutes: 1080,
+        preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
         createdAt: DateTime(2020, 1, 1),
       );
       await testDeps.deps.eventTypes.upsert(original);
@@ -152,8 +304,7 @@ void main() {
           name: 'PT session',
           durationMinutes: 60,
           preferredWeekdays: const {1, 2, 3, 4, 5},
-          preferredStartMinutes: 480,
-          preferredEndMinutes: 1080,
+          preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
           createdAt: DateTime(2020, 1, 1),
         );
         await testDeps.deps.eventTypes.upsert(original);

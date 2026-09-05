@@ -77,6 +77,62 @@ final class BusyInterval {
   String toString() => 'BusyInterval(start: $start, end: $end, title: $title)';
 }
 
+/// One event read back from the phone calendar, with the details a card
+/// can be prefilled from. Recurring events arrive one [CalendarEvent] per
+/// occurrence.
+final class CalendarEvent {
+  const CalendarEvent({
+    required this.id,
+    required this.calendarId,
+    required this.title,
+    required this.start,
+    required this.end,
+    required this.isAllDay,
+    this.location,
+    this.notes,
+  });
+
+  /// Identifies this occurrence. The same value [CalendarGateway.createEvent]
+  /// returns and [CalendarGateway.existingEventIds] takes.
+  final String id;
+
+  final String calendarId;
+
+  /// Trimmed. May be empty when the event has no title.
+  final String title;
+
+  final DateTime start;
+  final DateTime end;
+  final bool isAllDay;
+  final String? location;
+
+  /// The event's description, trimmed; `null` when it has none.
+  final String? notes;
+
+  /// The event's length in minutes. Zero or negative for a malformed event.
+  int get durationMinutes => end.difference(start).inMinutes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CalendarEvent &&
+      other.id == id &&
+      other.calendarId == calendarId &&
+      other.title == title &&
+      other.start == start &&
+      other.end == end &&
+      other.isAllDay == isAllDay &&
+      other.location == location &&
+      other.notes == notes;
+
+  @override
+  int get hashCode =>
+      Object.hash(id, calendarId, title, start, end, isAllDay, location, notes);
+
+  @override
+  String toString() =>
+      'CalendarEvent(id: $id, title: $title, start: $start, end: $end)';
+}
+
 /// Thrown when [CalendarGateway.createEvent] fails to write an event.
 class CalendarWriteException implements Exception {
   CalendarWriteException(this.message, [this.cause]);
@@ -105,6 +161,21 @@ abstract interface class CalendarGateway {
     required DateTime from,
     required DateTime to,
   });
+
+  /// Every event from every readable calendar overlapping `[from, to)`,
+  /// sorted by start. Recurring events are expanded into one entry per
+  /// occurrence. Unlike [busyIntervals] nothing is filtered out, so
+  /// all-day and free events are included and the caller decides.
+  /// Requires `access == granted`.
+  Future<List<CalendarEvent>> listEvents({
+    required DateTime from,
+    required DateTime to,
+  });
+
+  /// Which of [eventIds] the calendar still knows about. An id the user
+  /// has deleted from their calendar is left out of the result, so the app
+  /// can drop the booking that pointed at it. Requires `access == granted`.
+  Future<Set<String>> existingEventIds(Set<String> eventIds);
 
   /// Creates one timed, non-recurring event. Returns the calendar event id.
   /// Throws [CalendarWriteException] on failure.

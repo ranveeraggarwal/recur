@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../app_scope.dart';
 import '../../calendar/calendar_gateway.dart';
 import '../../core/local_date.dart';
+import '../../data/booking_sync.dart';
 import '../../data/models/app_settings.dart';
 import '../../data/models/booking.dart';
 import '../../data/models/event_type.dart';
@@ -34,11 +35,7 @@ class BookingController extends ChangeNotifier {
 
   List<CalendarInfo> _writableCalendars = const [];
   AppSettings _settings = AppSettings.empty;
-  SuggestionWindow _window = const SuggestionWindow(
-    weekdays: {},
-    startMinutes: 360,
-    endMinutes: 1320,
-  );
+  SuggestionWindow _window = const SuggestionWindow(weekdays: {}, windows: []);
 
   bool _initialized = false;
   bool get initialized => _initialized;
@@ -70,6 +67,12 @@ class BookingController extends ChangeNotifier {
     _settings = await _deps.settings.get();
 
     if (access == CalendarAccess.granted) {
+      // A booking whose calendar event the user deleted should stop
+      // steering the suggestions.
+      await pruneVanishedBookings(
+        bookings: _deps.bookings,
+        calendar: _deps.calendar,
+      );
       await _refreshWindow();
       await showWeek(weekMonday);
     }

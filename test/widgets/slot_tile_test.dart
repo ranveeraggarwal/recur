@@ -57,6 +57,23 @@ void main() {
       expect(tapped, isFalse);
     });
 
+    testWidgets('does-not-fit tile does not fire onTap', (tester) async {
+      var tapped = false;
+      await pumpGolden(
+        tester,
+        SlotTile(
+          timeLabel: '09:30',
+          appearance: SlotTileAppearance.doesNotFit,
+          reasonText: 'Not enough room',
+          onTap: () => tapped = true,
+        ),
+        height: 60,
+      );
+
+      await tester.tap(find.byType(SlotTile));
+      expect(tapped, isFalse);
+    });
+
     testWidgets('selected tile fires onTap (toggles off)', (tester) async {
       var tapped = false;
       await pumpGolden(
@@ -116,10 +133,15 @@ void main() {
               appearance: SlotTileAppearance.blocked,
               reasonText: 'Outside hours',
             ),
+            const SlotTile(
+              timeLabel: '12:00',
+              appearance: SlotTileAppearance.doesNotFit,
+              reasonText: 'Not enough room',
+            ),
           ],
         ),
       ),
-      height: 400,
+      height: 450,
     );
 
     await expectLater(

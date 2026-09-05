@@ -5,12 +5,20 @@ import 'package:recur/screens/booking/timeline.dart';
 import 'package:recur/suggestions/slot_grid.dart';
 import 'package:recur/widgets/slot_tile.dart';
 
-Slot _slot(int startMinutes, {int durationMinutes = 30}) {
+Slot _slot(
+  int startMinutes, {
+  int durationMinutes = 30,
+  SlotState state = SlotState.available,
+  BlockReason? blockReason,
+  String? blockingTitle,
+}) {
   return Slot(
     date: LocalDate(2026, 9, 8),
     startMinutes: startMinutes,
     endMinutes: startMinutes + durationMinutes,
-    state: SlotState.available,
+    state: state,
+    blockReason: blockReason,
+    blockingTitle: blockingTitle,
   );
 }
 
@@ -71,5 +79,74 @@ void main() {
     );
 
     expect(toggled, same(selected));
+  });
+
+  testWidgets('a busy hour greys its own two rows and no more', (tester) async {
+    // 10:00-11:00 is taken; a 60-minute appointment at 09:30 would run
+    // into it.
+    final slots = [
+      _slot(540, durationMinutes: 60),
+      _slot(
+        570,
+        durationMinutes: 60,
+        state: SlotState.blocked,
+        blockReason: BlockReason.doesNotFit,
+      ),
+      for (final start in [600, 630])
+        _slot(
+          start,
+          durationMinutes: 60,
+          state: SlotState.blocked,
+          blockReason: BlockReason.conflict,
+          blockingTitle: 'Jazz Dance Book Discussion',
+        ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Timeline(slots: slots, selectedSlot: null, onToggle: (_) {}),
+        ),
+      ),
+    );
+
+    SlotTile tileFor(String label) => tester.widget<SlotTile>(
+      find.byWidgetPredicate((w) => w is SlotTile && w.timeLabel == label),
+    );
+
+    expect(tileFor('09:00').appearance, SlotTileAppearance.available);
+    expect(tileFor('09:30').appearance, SlotTileAppearance.doesNotFit);
+    expect(tileFor('09:30').reasonText, 'Not enough room');
+    for (final label in ['10:00', '10:30']) {
+      expect(tileFor(label).appearance, SlotTileAppearance.blocked);
+      expect(tileFor(label).reasonText, 'Jazz Dance Book Discussion');
+    }
+  });
+
+  testWidgets('a slot that does not fit cannot be tapped', (tester) async {
+    var toggled = false;
+    final slots = [
+      _slot(
+        570,
+        durationMinutes: 60,
+        state: SlotState.blocked,
+        blockReason: BlockReason.doesNotFit,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Timeline(
+            slots: slots,
+            selectedSlot: null,
+            onToggle: (_) => toggled = true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(SlotTile));
+    expect(toggled, isFalse);
   });
 }

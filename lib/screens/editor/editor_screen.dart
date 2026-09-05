@@ -9,8 +9,8 @@ import '../../widgets/duration_pill.dart';
 import '../../widgets/location_autocomplete_field.dart';
 import '../../widgets/recur_text_field.dart';
 import 'editor_controller.dart';
+import 'prefill_sheet.dart';
 
-const List<int> _presetDurations = [30, 45, 60, 90];
 const List<String> _weekdayLabels = [
   'Mon',
   'Tue',
@@ -90,6 +90,22 @@ class _EditorScreenState extends State<EditorScreen> {
     super.dispose();
   }
 
+  /// Opens the copy-from-calendar sheet and, when the user picks an
+  /// event, replaces the whole draft with it. The text fields are pushed
+  /// their new values by hand: they own their own [TextEditingController]s
+  /// and do not rebuild from the controller.
+  Future<void> _copyFromCalendar() async {
+    final controller = _controller!;
+    final prefill = await showPrefillSheet(context);
+    if (prefill == null || !mounted) return;
+
+    controller.applyPrefill(prefill);
+    _nameController.text = controller.name;
+    _locationController.text = controller.location ?? '';
+    _notesController.text = controller.notes ?? '';
+    _customDurationController.text = controller.customDurationText;
+  }
+
   Future<void> _save() async {
     final controller = _controller!;
     await controller.save();
@@ -147,6 +163,18 @@ class _EditorScreenState extends State<EditorScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 spacing: RecurSpacing.xl,
                 children: [
+                  if (controller.isNew)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _copyFromCalendar,
+                        icon: const Icon(Icons.event_outlined, size: 20),
+                        label: const Text('Copy from calendar'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: RecurColors.primary,
+                        ),
+                      ),
+                    ),
                   RecurTextField(
                     label: 'Name',
                     controller: _nameController,
@@ -219,7 +247,7 @@ class _DurationGroup extends StatelessWidget {
           spacing: RecurSpacing.sm,
           runSpacing: RecurSpacing.sm,
           children: [
-            for (final preset in _presetDurations)
+            for (final preset in editorPresetDurations)
               IntrinsicWidth(
                 child: DurationPill(
                   label: formatDuration(preset),
@@ -294,33 +322,56 @@ class _TimeWindowGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final windows = controller.windows;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Preferred time window',
+          'Preferred times',
           style: RecurText.label.copyWith(color: RecurColors.muted),
         ),
         const SizedBox(height: RecurSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: _TimeField(
-                label: 'Start',
-                value: controller.startMinutes,
-                onChanged: controller.setStartMinutes,
+        for (var i = 0; i < windows.length; i++) ...[
+          if (i > 0) const SizedBox(height: RecurSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _TimeField(
+                  label: 'Start',
+                  value: windows[i].startMinutes,
+                  onChanged: (minutes) => controller.setWindowStart(i, minutes),
+                ),
               ),
-            ),
-            const SizedBox(width: RecurSpacing.md),
-            Expanded(
-              child: _TimeField(
-                label: 'End',
-                value: controller.endMinutes,
-                onChanged: controller.setEndMinutes,
+              const SizedBox(width: RecurSpacing.md),
+              Expanded(
+                child: _TimeField(
+                  label: 'End',
+                  value: windows[i].endMinutes,
+                  onChanged: (minutes) => controller.setWindowEnd(i, minutes),
+                ),
               ),
-            ),
-          ],
+              if (windows.length > 1)
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  color: RecurColors.muted,
+                  tooltip: 'Remove this time',
+                  onPressed: () => controller.removeWindow(i),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: RecurSpacing.xs),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: controller.addWindow,
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('Add a time'),
+            style: TextButton.styleFrom(foregroundColor: RecurColors.primary),
+          ),
         ),
         if (controller.windowError != null) ...[
           const SizedBox(height: RecurSpacing.xs),

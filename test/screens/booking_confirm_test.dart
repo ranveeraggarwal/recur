@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/booking/booking_screen.dart';
 import 'package:recur/widgets/confirm_button.dart';
@@ -16,8 +17,7 @@ EventType _ptSession() {
     durationMinutes: 60,
     location: 'Kungsholmen',
     preferredWeekdays: const {2, 4},
-    preferredStartMinutes: 540,
-    preferredEndMinutes: 720,
+    preferredWindows: [TimeWindow(startMinutes: 540, endMinutes: 720)],
     createdAt: DateTime(2020, 1, 1),
   );
 }

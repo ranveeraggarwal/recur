@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/event_type_repository.dart';
 import 'package:recur/data/local_store.dart';
 import 'package:recur/data/models/event_type.dart';
@@ -21,8 +22,12 @@ EventType _sample({
     location: location,
     notes: notes,
     preferredWeekdays: preferredWeekdays,
-    preferredStartMinutes: preferredStartMinutes,
-    preferredEndMinutes: preferredEndMinutes,
+    preferredWindows: [
+      TimeWindow(
+        startMinutes: preferredStartMinutes,
+        endMinutes: preferredEndMinutes,
+      ),
+    ],
     createdAt: createdAt ?? DateTime(2026, 9, 4, 10, 0),
   );
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
+import 'package:recur/calendar/calendar_gateway.dart';
+import 'package:recur/core/local_date.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/booking/booking_screen.dart';
 import 'package:recur/widgets/day_pill.dart';
@@ -17,8 +20,7 @@ EventType _ptSession() {
     durationMinutes: 60,
     location: 'Kungsholmen',
     preferredWeekdays: const {2, 4},
-    preferredStartMinutes: 540,
-    preferredEndMinutes: 720,
+    preferredWindows: [TimeWindow(startMinutes: 540, endMinutes: 720)],
     createdAt: DateTime(2020, 1, 1),
   );
 }
@@ -121,6 +123,34 @@ void main() {
       );
 
       await expectGolden(tester, 'booking_week');
+    });
+
+    testWidgets('booking_busy_hour', (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await testDeps.deps.eventTypes.upsert(_ptSession());
+      final tuesday = LocalDate(2026, 9, 8);
+      testDeps.calendar.busy.add(
+        BusyInterval(
+          start: tuesday.at(600), // 10:00
+          end: tuesday.at(660), // 11:00
+          title: 'Jazz Dance Book Discussion',
+        ),
+      );
+
+      await pumpGolden(
+        tester,
+        AppScope(
+          deps: testDeps.deps,
+          child: const BookingScreen(eventTypeId: 'et-1'),
+        ),
+        height: 900,
+        scaffold: false,
+      );
+
+      await tester.tap(find.text('Tue'));
+      await tester.pumpAndSettle();
+
+      await expectGolden(tester, 'booking_busy_hour');
     });
 
     testWidgets('booking_selected', (WidgetTester tester) async {

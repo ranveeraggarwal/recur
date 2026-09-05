@@ -46,6 +46,25 @@ BusyInterval busyIntervalFrom(Event event) {
   );
 }
 
+/// Maps a plugin [Event] to a [CalendarEvent]. Titles and descriptions are
+/// trimmed; an empty description becomes `null`.
+CalendarEvent calendarEventFrom(Event event) {
+  final trimmedNotes = event.description?.trim();
+  final trimmedLocation = event.location?.trim();
+  return CalendarEvent(
+    id: event.instanceId,
+    calendarId: event.calendarId,
+    title: event.title.trim(),
+    start: event.startDate,
+    end: event.endDate,
+    isAllDay: event.isAllDay,
+    location: (trimmedLocation == null || trimmedLocation.isEmpty)
+        ? null
+        : trimmedLocation,
+    notes: (trimmedNotes == null || trimmedNotes.isEmpty) ? null : trimmedNotes,
+  );
+}
+
 /// Whether a plugin [Event] blocks a slot: not all-day, and not marked free.
 bool isBlockingEvent(Event event) {
   return !event.isAllDay && event.availability != EventAvailability.free;
@@ -94,6 +113,29 @@ class DeviceCalendarGateway implements CalendarGateway {
         events.where(isBlockingEvent).map(busyIntervalFrom).toList()
           ..sort((a, b) => a.start.compareTo(b.start));
     return intervals;
+  }
+
+  @override
+  Future<List<CalendarEvent>> listEvents({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final events = await _plugin.listEvents(from, to);
+    final mapped = events.map(calendarEventFrom).toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    return mapped;
+  }
+
+  @override
+  Future<Set<String>> existingEventIds(Set<String> eventIds) async {
+    final alive = <String>{};
+    for (final id in eventIds) {
+      final event = await _plugin.getEvent(id);
+      if (event != null && event.status != EventStatus.canceled) {
+        alive.add(id);
+      }
+    }
+    return alive;
   }
 
   @override

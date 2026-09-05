@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
 import 'package:recur/core/local_date.dart';
+import 'package:recur/core/time_window.dart';
 import 'package:recur/suggestions/slot_grid.dart';
 import 'package:recur/suggestions/suggestion_window.dart';
 
@@ -12,8 +13,7 @@ const _needsStockholm = 'Run with TZ=Europe/Stockholm';
 
 final _emptyWindow = SuggestionWindow(
   weekdays: const <int>{},
-  startMinutes: 360,
-  endMinutes: 1320,
+  windows: [TimeWindow(startMinutes: 360, endMinutes: 1320)],
 );
 
 void main() {
@@ -126,15 +126,67 @@ void main() {
       for (final startMinutes in [570, 600, 630]) {
         final slot = slots.firstWhere((s) => s.startMinutes == startMinutes);
         expect(
-          slot.blockReason,
-          BlockReason.conflict,
-          reason: 'slot at $startMinutes should conflict',
+          slot.state,
+          SlotState.blocked,
+          reason: 'slot at $startMinutes should be blocked',
         );
       }
       final slot540 = slots.firstWhere((s) => s.startMinutes == 540); // 09:00
       final slot660 = slots.firstWhere((s) => s.startMinutes == 660); // 11:00
       expect(slot540.state, isNot(SlotState.blocked));
       expect(slot660.state, isNot(SlotState.blocked));
+    });
+
+    test('an hour-long event names itself on its own two rows only', () {
+      final date = LocalDate(2026, 6, 15);
+      final busy = [
+        BusyInterval(start: date.at(600), end: date.at(660), title: 'Standup'),
+      ];
+      final slots = buildSlotGrid(
+        date: date,
+        durationMinutes: 60,
+        window: _emptyWindow,
+        busy: busy,
+        now: DateTime(2020, 1, 1),
+      );
+
+      // 10:00 and 10:30 are the rows the event actually covers.
+      for (final startMinutes in [600, 630]) {
+        final slot = slots.firstWhere((s) => s.startMinutes == startMinutes);
+        expect(
+          slot.blockReason,
+          BlockReason.conflict,
+          reason: 'slot at $startMinutes is covered by the event',
+        );
+        expect(slot.blockingTitle, 'Standup');
+      }
+
+      // 09:30 is free itself: a 60-minute appointment there would just run
+      // into the event.
+      final slot570 = slots.firstWhere((s) => s.startMinutes == 570);
+      expect(slot570.blockReason, BlockReason.doesNotFit);
+      expect(slot570.blockingTitle, isNull);
+
+      final named = slots.where((s) => s.blockReason == BlockReason.conflict);
+      expect(named, hasLength(2));
+    });
+
+    test('a short appointment fits in a gap between events', () {
+      final date = LocalDate(2026, 6, 15);
+      final busy = [
+        // 10:10-10:20, entirely inside the 10:00 row.
+        BusyInterval(start: date.at(610), end: date.at(620), title: 'Call'),
+      ];
+      final slots = buildSlotGrid(
+        date: date,
+        durationMinutes: 5,
+        window: _emptyWindow,
+        busy: busy,
+        now: DateTime(2020, 1, 1),
+      );
+      // 10:00-10:05 ends before the call starts, so nothing blocks it.
+      final slot = slots.firstWhere((s) => s.startMinutes == 600);
+      expect(slot.state, isNot(SlotState.blocked));
     });
 
     test('event ending at slot start does not block', () {
@@ -170,7 +222,7 @@ void main() {
     test('blockingTitle is the earliest overlapping event\'s title, null when untitled', () {
       final date = LocalDate(2026, 6, 15);
       final busy = [
-        BusyInterval(start: date.at(630), end: date.at(660), title: 'Later'),
+        BusyInterval(start: date.at(615), end: date.at(660), title: 'Later'),
         BusyInterval(start: date.at(600), end: date.at(630)),
       ];
       final slots = buildSlotGrid(
@@ -180,9 +232,9 @@ void main() {
         busy: busy,
         now: DateTime(2020, 1, 1),
       );
-      // 09:30-11:00 overlaps both busy intervals; the earlier one (10:00) has
-      // no title.
-      final slot = slots.firstWhere((s) => s.startMinutes == 570);
+      // The 10:00 row is covered by both busy intervals; the earlier one
+      // (starting 10:00) has no title.
+      final slot = slots.firstWhere((s) => s.startMinutes == 600);
       expect(slot.blockReason, BlockReason.conflict);
       expect(slot.blockingTitle, isNull);
     });
@@ -192,8 +244,7 @@ void main() {
       final tuesday = LocalDate(2026, 6, 16); // Tuesday
       final window = SuggestionWindow(
         weekdays: const {1}, // Monday only
-        startMinutes: 540, // 09:00
-        endMinutes: 720, // 12:00
+        windows: [TimeWindow(startMinutes: 540, endMinutes: 720)], // 12:00
       );
       final mondaySlots = buildSlotGrid(
         date: monday,
@@ -227,8 +278,7 @@ void main() {
       final date = LocalDate(2026, 6, 15); // Monday
       final window = SuggestionWindow(
         weekdays: const {1},
-        startMinutes: 540, // 09:00
-        endMinutes: 660, // 11:00
+        windows: [TimeWindow(startMinutes: 540, endMinutes: 660)], // 11:00
       );
       final slots = buildSlotGrid(
         date: date,
@@ -255,8 +305,7 @@ void main() {
       final date = LocalDate(2026, 6, 15); // Monday
       final window = SuggestionWindow(
         weekdays: const {1},
-        startMinutes: 360,
-        endMinutes: 1320,
+        windows: [TimeWindow(startMinutes: 360, endMinutes: 1320)],
       );
       final slots = buildSlotGrid(
         date: date,
@@ -274,8 +323,7 @@ void main() {
       final date = LocalDate(2026, 6, 15); // Monday
       final window = SuggestionWindow(
         weekdays: const {1},
-        startMinutes: 360,
-        endMinutes: 1320,
+        windows: [TimeWindow(startMinutes: 360, endMinutes: 1320)],
       );
       final busy = [BusyInterval(start: date.at(600), end: date.at(630))];
       final slots = buildSlotGrid(
@@ -294,8 +342,7 @@ void main() {
       final date = LocalDate(2026, 6, 15); // Monday
       final window = SuggestionWindow(
         weekdays: const {1},
-        startMinutes: 360,
-        endMinutes: 1320,
+        windows: [TimeWindow(startMinutes: 360, endMinutes: 1320)],
       );
       final slots = buildSlotGrid(
         date: date,
@@ -347,7 +394,8 @@ void main() {
       expect(DateTime(2026, 3, 29, 0, 0).add(const Duration(hours: 6)).hour, 7);
     }, skip: _isStockholm ? false : _needsStockholm);
 
-    test('spring-forward Sunday conflict at 10:00-11:00 blocks 09:30, 10:00, 10:30 for 60 min', () {
+    test('spring-forward Sunday conflict at 10:00-11:00 covers 10:00 and '
+        '10:30, and 09:30 does not fit a 60 min appointment', () {
       final date = LocalDate(2026, 3, 29);
       final busy = [BusyInterval(start: date.at(600), end: date.at(660))];
       final slots = buildSlotGrid(
@@ -357,10 +405,12 @@ void main() {
         busy: busy,
         now: DateTime(2020, 1, 1),
       );
-      for (final startMinutes in [570, 600, 630]) {
+      for (final startMinutes in [600, 630]) {
         final slot = slots.firstWhere((s) => s.startMinutes == startMinutes);
         expect(slot.blockReason, BlockReason.conflict);
       }
+      final slot570 = slots.firstWhere((s) => s.startMinutes == 570);
+      expect(slot570.blockReason, BlockReason.doesNotFit);
     }, skip: _isStockholm ? false : _needsStockholm);
 
     test(
@@ -406,10 +456,12 @@ void main() {
         busy: busy,
         now: DateTime(2020, 1, 1),
       );
-      for (final startMinutes in [570, 600, 630]) {
+      for (final startMinutes in [600, 630]) {
         final slot = slots.firstWhere((s) => s.startMinutes == startMinutes);
         expect(slot.blockReason, BlockReason.conflict);
       }
+      final slot570 = slots.firstWhere((s) => s.startMinutes == 570);
+      expect(slot570.blockReason, BlockReason.doesNotFit);
       final slot540 = slots.firstWhere((s) => s.startMinutes == 540);
       expect(slot540.state, isNot(SlotState.blocked));
     }, skip: _isStockholm ? false : _needsStockholm);
@@ -418,8 +470,7 @@ void main() {
         'Sunday 09:00 when window includes weekday 7', () {
       final window = SuggestionWindow(
         weekdays: const {1, 2, 3, 4, 5, 6, 7},
-        startMinutes: 540, // 09:00
-        endMinutes: 1320,
+        windows: [TimeWindow(startMinutes: 540, endMinutes: 1320)],
       );
       var date = LocalDate(2026, 3, 23);
       final grids = <List<Slot>>[];

@@ -405,5 +405,92 @@ void main() {
         },
       );
     });
+
+    group('listEvents', () {
+      test('returns seeded events and created ones, sorted by start', () async {
+        gateway.events.add(
+          CalendarEvent(
+            id: 'seed-1',
+            calendarId: 'cal-1',
+            title: 'Physio',
+            start: DateTime(2026, 9, 4, 14),
+            end: DateTime(2026, 9, 4, 15),
+            isAllDay: false,
+          ),
+        );
+        await gateway.createEvent(
+          calendarId: 'cal-1',
+          title: 'PT session',
+          start: DateTime(2026, 9, 4, 10),
+          end: DateTime(2026, 9, 4, 11),
+        );
+
+        final events = await gateway.listEvents(
+          from: DateTime(2026, 9, 4),
+          to: DateTime(2026, 9, 5),
+        );
+
+        expect(events.map((e) => e.title), ['PT session', 'Physio']);
+      });
+
+      test('excludes events outside the range', () async {
+        gateway.events.add(
+          CalendarEvent(
+            id: 'seed-1',
+            calendarId: 'cal-1',
+            title: 'Physio',
+            start: DateTime(2026, 9, 10, 14),
+            end: DateTime(2026, 9, 10, 15),
+            isAllDay: false,
+          ),
+        );
+
+        final events = await gateway.listEvents(
+          from: DateTime(2026, 9, 4),
+          to: DateTime(2026, 9, 5),
+        );
+
+        expect(events, isEmpty);
+      });
+
+      test('throws without access', () async {
+        gateway.access = CalendarAccess.denied;
+
+        expect(
+          () => gateway.listEvents(
+            from: DateTime(2026, 9, 4),
+            to: DateTime(2026, 9, 5),
+          ),
+          throwsStateError,
+        );
+      });
+    });
+
+    group('existingEventIds', () {
+      test('keeps created ids and drops unknown ones', () async {
+        final id = await gateway.createEvent(
+          calendarId: 'cal-1',
+          title: 'PT session',
+          start: DateTime(2026, 9, 4, 10),
+          end: DateTime(2026, 9, 4, 11),
+        );
+
+        expect(await gateway.existingEventIds({id, 'gone'}), {id});
+      });
+
+      test('keeps ids seeded through knownEventIds', () async {
+        gateway.knownEventIds.add('evt-seeded');
+
+        expect(await gateway.existingEventIds({'evt-seeded', 'gone'}), {
+          'evt-seeded',
+        });
+      });
+
+      test('throws without access', () async {
+        gateway.access = CalendarAccess.denied;
+
+        expect(() => gateway.existingEventIds({'evt-1'}), throwsStateError);
+      });
+    });
   });
 }
