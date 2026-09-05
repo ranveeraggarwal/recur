@@ -33,7 +33,14 @@ class Timeline extends StatelessWidget {
 
   Widget _row(Slot slot) {
     final isHourMark = slot.startMinutes % 60 == 0;
-    final appearance = _appearanceFor(slot, selectedSlot);
+    final coveringSelection = _coveringSelection(slot, selectedSlot);
+    final appearance = coveringSelection != null
+        ? SlotTileAppearance.selected
+        : switch (slot.state) {
+            SlotState.available => SlotTileAppearance.available,
+            SlotState.highlighted => SlotTileAppearance.highlighted,
+            SlotState.blocked => SlotTileAppearance.blocked,
+          };
     final reasonText = slot.state == SlotState.blocked
         ? switch (slot.blockReason!) {
             BlockReason.past => 'Past',
@@ -91,7 +98,7 @@ class Timeline extends StatelessWidget {
                 reasonText: reasonText,
                 onTap: appearance == SlotTileAppearance.blocked
                     ? null
-                    : () => onToggle(slot),
+                    : () => onToggle(coveringSelection ?? slot),
               ),
             ),
           ),
@@ -101,15 +108,12 @@ class Timeline extends StatelessWidget {
   }
 }
 
-SlotTileAppearance _appearanceFor(Slot slot, Slot? selected) {
-  final isSelected =
-      selected != null &&
-      selected.date == slot.date &&
-      selected.startMinutes == slot.startMinutes;
-  if (isSelected) return SlotTileAppearance.selected;
-  return switch (slot.state) {
-    SlotState.available => SlotTileAppearance.available,
-    SlotState.highlighted => SlotTileAppearance.highlighted,
-    SlotState.blocked => SlotTileAppearance.blocked,
-  };
+/// Returns [selected] when [slot] falls inside its
+/// `[startMinutes, endMinutes)` span (so the whole booked duration is
+/// highlighted, not just the row it was picked on), else `null`.
+Slot? _coveringSelection(Slot slot, Slot? selected) {
+  if (selected == null || selected.date != slot.date) return null;
+  if (slot.startMinutes < selected.startMinutes) return null;
+  if (slot.startMinutes >= selected.endMinutes) return null;
+  return selected;
 }
