@@ -6,6 +6,7 @@ import '../../core/time_of_day_minutes.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/confirm_button.dart';
 import '../../widgets/duration_pill.dart';
+import '../../widgets/location_autocomplete_field.dart';
 import '../../widgets/recur_text_field.dart';
 import 'editor_controller.dart';
 
@@ -157,10 +158,9 @@ class _EditorScreenState extends State<EditorScreen> {
                     controller: controller,
                     customDurationController: _customDurationController,
                   ),
-                  RecurTextField(
-                    label: 'Location',
+                  LocationAutocompleteField(
                     controller: _locationController,
-                    maxLength: 80,
+                    places: AppScope.of(context).places,
                   ),
                   RecurTextField(
                     label: 'Notes',

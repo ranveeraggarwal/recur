@@ -14,6 +14,7 @@ import 'data/event_type_repository.dart';
 import 'data/json_file_local_store.dart';
 import 'data/local_store.dart';
 import 'data/settings_repository.dart';
+import 'places/nominatim_places_gateway.dart';
 
 /// Builds the app's [AppDependencies] on top of [store], swapping in
 /// [FakeCalendarGateway] when [useFakeCalendar] is true and
@@ -31,6 +32,7 @@ AppDependencies buildDependencies({
     bookings: LocalBookingRepository(store),
     settings: LocalSettingsRepository(store),
     calendar: useFakeCalendar ? FakeCalendarGateway() : DeviceCalendarGateway(),
+    places: NominatimPlacesGateway(),
   );
 }
 
