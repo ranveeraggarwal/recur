@@ -4,9 +4,11 @@ A small app deserves a small architecture. Here is the whole thing.
 
 ## The tools
 
-Flutter 3.47.2 (Dart 3.13.2), Android only, minSdk 24, targetSdk 35. One
-plugin for the calendar, `device_calendar_plus` 0.8.0, and `path_provider`
-for a folder to save files in. That is the full dependency list.
+Flutter 3.47.2 (Dart 3.13.2), Android and iOS. Android minSdk 24, targetSdk
+35; iOS 15.0+. One plugin for the calendar, `device_calendar_plus` 0.8.0
+(itself a federated plugin with separate Android and iOS implementations),
+and `path_provider` for a folder to save files in. That is the full
+dependency list.
 
 Before you push anything:
 
@@ -128,7 +130,11 @@ completes, so loading them in the test body hangs until it times out.
 | Outfit font | Google Fonts ships Outfit only as a variable font, so the three static weights are instanced from it at 400, 500 and 600 with fontTools and vendored under `assets/fonts`. |
 | `formatLastBooked` signature | `Booking` does not exist yet, so it takes `{required DateTime? latestStart, required DateTime now}` instead of `(Booking? latest, DateTime now)`. |
 | `formatSlotSummary` signature | `Slot` does not exist yet, so `core/formatting.dart` provides `formatDaySpan({required LocalDate date, required int startMinutes, required int endMinutes})` instead. |
-| App icon | Adaptive icon: `ic_launcher_background` (primary green) behind a vector foreground of two off-square rounded rectangles in `surface`, echoing the home grid's cards. Legacy PNGs for pre-API-26 launchers are rasterized from the same shapes with Pillow, since no SVG rasterizer is available in the build container. |
+| App icon | Adaptive icon: `ic_launcher_background` (primary green) behind a vector foreground of two off-square rounded rectangles in `surface`, echoing the home grid's cards. Legacy PNGs for pre-API-26 launchers are rasterized from the same shapes with Pillow, since no SVG rasterizer is available in the build container. The iOS `AppIcon.appiconset` is rasterized from the same coordinates (`ic_launcher_foreground.xml`'s two rects, flattened onto the solid `ic_launcher_background` colour, opaque, no alpha, since Apple rejects icons with transparency and rounds the corners itself). |
+| iOS platform files | Scaffolded with `flutter create --platforms=ios --org com.ranveeraggarwal .`, keeping the existing `recur` project name so the bundle id lands on `com.ranveeraggarwal.recur`, matching Android's `applicationId`. |
+| iOS calendar permission strings | `device_calendar_plus`'s `CalendarAccessLevel.full` request (see `device_calendar_gateway.dart`) needs both the legacy `NSCalendarsUsageDescription` (iOS 10-16) and `NSCalendarsFullAccessUsageDescription` (iOS 17+) keys in `ios/Runner/Info.plist`, mirroring Android's `READ_CALENDAR`/`WRITE_CALENDAR` manifest permissions. |
+| iOS launch screen | `LaunchScreen.storyboard`'s background colour is set to the same sand `#F4EFE6` as Android's `launch_background`, matching `android/app/.../values-v21/styles.xml`'s comment that Recur has no dark theme and never shows the OS's black default. |
+| iOS CI | A `build-ios` job on `macos-latest` runs `flutter build ios --debug --no-codesign` to catch build breakage. There is no Apple Developer account, signing certificate, or provisioning profile, so this verifies the build only; it does not produce a signed IPA or publish anywhere. |
 | `FixedClock` mutation API | `Clock.now` is an interface method, and Dart does not allow a method and a property setter to share a name in the same class, so `FixedClock` exposes `setNow(DateTime value)` as a plain method rather than a `now` setter. |
 | `EventType` trim contract | A `const` constructor can only assert potentially-constant expressions, and `String.trim()` is not one, so the constructor checks lengths only. Callers pass already-trimmed strings; `validateName` trims before checking. |
 | Extra validator messages | The product brief names only `Name is required.` and `End must be after start plus the duration.` The remaining bounds needed messages too, so `EventType` adds plainly worded ones in the same sentence case. |

@@ -1,8 +1,8 @@
 # Recur
 
-Recur is an Android app for booking irregular recurring appointments, like
-physio or a trainer, into your phone calendar. You keep a card for each kind
-of appointment; when it is time to rebook, Recur shows you a week of your
+Recur is an Android and iOS app for booking irregular recurring appointments,
+like physio or a trainer, into your phone calendar. You keep a card for each
+kind of appointment; when it is time to rebook, Recur shows you a week of your
 real calendar with the good slots lit up, and writes one event when you
 confirm. All data stays on the phone.
 
@@ -13,13 +13,14 @@ notifications or reminders. It never edits or deletes a calendar event, only
 creates one, and every booking is a single, one-off event, never a
 recurring series. There is no machine learning, just a fixed rule set for
 suggesting slots. There is no settings screen beyond a calendar picker that
-only appears when the phone has more than one writable calendar. The app is
-Android only, with one light theme.
+only appears when the phone has more than one writable calendar. There is
+one light theme.
 
 ## Requirements
 
 Flutter 3.47.2 stable (Dart 3.13.2). Android minSdk 24, targetSdk 35,
-package `com.ranveeraggarwal.recur`.
+package `com.ranveeraggarwal.recur`. iOS 15.0+, bundle id
+`com.ranveeraggarwal.recur`.
 
 ## Run
 
@@ -95,6 +96,11 @@ To cut a release:
 ```sh
 git tag v1.0.0 && git push --tags
 ```
+
+CI also builds an unsigned iOS app on every push (`flutter build ios --debug
+--no-codesign`) to catch build breakage, but there is no App Store/TestFlight
+signing set up. That needs an Apple Developer account, a distribution
+certificate, and a provisioning profile, none of which exist yet.
 
 ## Docs
 

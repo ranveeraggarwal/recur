@@ -1,6 +1,6 @@
 # Working on Recur
 
-Recur is an Android-only Flutter app for booking irregular recurring
+Recur is a Flutter app for Android and iOS for booking irregular recurring
 appointments (physio, trainer) into the phone calendar.
 
 Read these before touching code. They are the source of truth; issues quote
@@ -39,6 +39,9 @@ flutter analyze --fatal-infos
 TZ=Europe/Stockholm flutter test
 flutter build apk --debug
 ```
+
+`flutter build ios --debug --no-codesign` needs Xcode, so only macOS can run
+it locally; CI's `build-ios` job covers it everywhere else.
 
 Run `dart format lib test` and commit whatever it changes. Do not try to
 write format-clean Dart by hand. The Dart 3.7+ formatter rewrites more than

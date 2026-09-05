@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## Unreleased
+
+- iOS support: scaffolded `ios/`, added the calendar usage descriptions
+  `device_calendar_plus` needs, matched the app icon and launch background
+  to Android's, and added a CI job that builds the iOS app unsigned.
+
 ## 1.0.0 - 2026-09-05
 
 - Home: a grid of event-type cards with an empty state and a button to add
