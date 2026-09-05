@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
+import '../../calendar/calendar_gateway.dart';
 import '../../core/clock.dart';
 import '../../core/formatting.dart';
 import '../../data/models/event_type.dart';
@@ -59,6 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final eventType in eventTypes) {
       final latest = await deps.bookings.latestForEventType(eventType.id);
       cards.add(_HomeCard(eventType: eventType, latestStart: latest?.start));
+    }
+    if (await deps.calendar.checkAccess() == CalendarAccess.notDetermined) {
+      // Not asked yet: show the OS permission dialog now, rather than
+      // waiting for the user to open Booking.
+      await deps.calendar.requestAccess();
     }
     final calendars = await deps.calendar.listWritableCalendars();
     return _HomeLoad(cards: cards, writableCalendarCount: calendars.length);

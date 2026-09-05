@@ -17,3 +17,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   has more than one.
 - `DeviceCalendarGateway`: the adapter that reads calendars and busy times
   from, and writes events to, the phone's real calendar.
+- Home: requests calendar access on load when it has not been asked for
+  yet, so the system permission dialog appears without waiting for the
+  user to open Booking.
