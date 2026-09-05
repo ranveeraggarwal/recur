@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Sand background, from docs/design-system.md's --background token. -->
+    <!-- Sand background, from docs/design-system.md's "background" token. -->
     <color name="launch_background">#F4EFE6</color>
-    <!-- Forest green, from docs/design-system.md's --primary token. -->
+    <!-- Forest green, from docs/design-system.md's "primary" token. -->
     <color name="ic_launcher_background">#2C4A3B</color>
 </resources>
