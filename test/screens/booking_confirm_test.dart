@@ -3,11 +3,52 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
 import 'package:recur/core/time_window.dart';
+import 'package:recur/data/booking_repository.dart';
+import 'package:recur/data/models/booking.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/booking/booking_screen.dart';
 import 'package:recur/widgets/confirm_button.dart';
 
 import '../helpers/fakes.dart';
+
+/// A [BookingRepository] that delegates to [_inner] but throws once from
+/// [add], to simulate the calendar write succeeding while Recur's own
+/// booking log fails (disk full, a corrupt `bookings.json`, and so on).
+/// Kept in this file rather than `test/helpers/fakes.dart` per issue #75.
+class _ThrowOnceOnAddBookingRepository implements BookingRepository {
+  _ThrowOnceOnAddBookingRepository(this._inner);
+
+  final BookingRepository _inner;
+  bool _hasThrown = false;
+
+  @override
+  Future<List<Booking>> getAll() => _inner.getAll();
+
+  @override
+  Future<List<Booking>> getForEventType(String eventTypeId) =>
+      _inner.getForEventType(eventTypeId);
+
+  @override
+  Future<Booking?> latestForEventType(String eventTypeId) =>
+      _inner.latestForEventType(eventTypeId);
+
+  @override
+  Future<void> add(Booking booking) async {
+    if (!_hasThrown) {
+      _hasThrown = true;
+      throw Exception('bookings.json is corrupt');
+    }
+    await _inner.add(booking);
+  }
+
+  @override
+  Future<void> deleteForEventType(String eventTypeId) =>
+      _inner.deleteForEventType(eventTypeId);
+
+  @override
+  Future<void> deleteByIds(Set<String> bookingIds) =>
+      _inner.deleteByIds(bookingIds);
+}
 
 /// `PT session`, 60 min, Kungsholmen, no notes, preferred Tue/Thu 09:00-12:00.
 EventType _ptSession() {
@@ -24,10 +65,13 @@ EventType _ptSession() {
 
 /// Pushes [BookingScreen] on top of a root screen with an `open` button, so
 /// tests can observe `Navigator.pop` back to it.
-Future<void> _pumpBookingPushed(WidgetTester tester, TestDeps testDeps) async {
+Future<void> _pumpBookingPushed(
+  WidgetTester tester,
+  AppDependencies deps,
+) async {
   await tester.pumpWidget(
     AppScope(
-      deps: testDeps.deps,
+      deps: deps,
       child: MaterialApp(
         home: Builder(
           builder: (context) => Scaffold(
@@ -63,7 +107,7 @@ void main() {
       'returned calendar event id', (WidgetTester tester) async {
     final testDeps = buildTestDeps();
     await testDeps.deps.eventTypes.upsert(_ptSession());
-    await _pumpBookingPushed(tester, testDeps);
+    await _pumpBookingPushed(tester, testDeps.deps);
     await _selectSlot(tester);
 
     await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));
@@ -95,7 +139,7 @@ void main() {
       final testDeps = buildTestDeps();
       await testDeps.deps.eventTypes.upsert(_ptSession());
       testDeps.calendar.failNextCreateWith = 'boom';
-      await _pumpBookingPushed(tester, testDeps);
+      await _pumpBookingPushed(tester, testDeps.deps);
       await _selectSlot(tester);
 
       await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));
@@ -110,6 +154,40 @@ void main() {
   );
 
   testWidgets(
+    'when only the booking log fails, the event stays in the calendar, the '
+    'second snack bar is shown, and Booking is popped',
+    (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await testDeps.deps.eventTypes.upsert(_ptSession());
+      final deps = AppDependencies(
+        clock: testDeps.deps.clock,
+        ids: testDeps.deps.ids,
+        eventTypes: testDeps.deps.eventTypes,
+        bookings: _ThrowOnceOnAddBookingRepository(testDeps.deps.bookings),
+        settings: testDeps.deps.settings,
+        calendar: testDeps.deps.calendar,
+        places: testDeps.deps.places,
+      );
+      await _pumpBookingPushed(tester, deps);
+      await _selectSlot(tester);
+
+      await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));
+      await tester.pumpAndSettle();
+
+      // The calendar event was written even though the booking log failed.
+      expect(testDeps.calendar.created, hasLength(1));
+      expect(
+        find.text(
+          "Added to your calendar, but Recur couldn't save the booking.",
+        ),
+        findsOneWidget,
+      );
+      // Popped back to the root, so Confirm cannot be tapped again.
+      expect(find.text('open'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'with two calendars and no prior choice, the picker opens before confirm',
     (WidgetTester tester) async {
       final testDeps = buildTestDeps();
@@ -118,7 +196,7 @@ void main() {
         ...testDeps.calendar.calendars,
         const CalendarInfo(id: 'cal-2', name: 'Work', isPrimary: false),
       ];
-      await _pumpBookingPushed(tester, testDeps);
+      await _pumpBookingPushed(tester, testDeps.deps);
       await _selectSlot(tester);
 
       await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));
@@ -143,7 +221,7 @@ void main() {
   ) async {
     final testDeps = buildTestDeps();
     await testDeps.deps.eventTypes.upsert(_ptSession());
-    await _pumpBookingPushed(tester, testDeps);
+    await _pumpBookingPushed(tester, testDeps.deps);
     await _selectSlot(tester);
 
     await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));
@@ -158,7 +236,7 @@ void main() {
     (WidgetTester tester) async {
       final testDeps = buildTestDeps();
       await testDeps.deps.eventTypes.upsert(_ptSession());
-      await _pumpBookingPushed(tester, testDeps);
+      await _pumpBookingPushed(tester, testDeps.deps);
       await _selectSlot(tester);
 
       await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));

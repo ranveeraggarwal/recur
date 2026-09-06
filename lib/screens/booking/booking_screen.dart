@@ -112,11 +112,26 @@ class _BookingScreenState extends State<BookingScreen> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } on CalendarWriteException {
+      // Nothing was written anywhere.
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Couldn't add to calendar.")),
       );
+    } catch (_) {
+      // The event exists in the calendar; only Recur's own record failed.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Added to your calendar, but Recur couldn't save the booking.",
+          ),
+        ),
+      );
+      // Leave Booking so Confirm cannot be tapped again. Home will reload
+      // on pop and still show the card as not booked, which is honest:
+      // the record really is missing.
+      Navigator.of(context).pop(true);
     }
   }
 
