@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import '../../app_scope.dart';
 import '../../calendar/calendar_gateway.dart';
 import '../../core/formatting.dart';
+import '../../core/local_date.dart';
 import '../../data/models/event_type.dart';
-import '../../suggestions/slot_grid.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/access_state.dart';
 import '../../widgets/confirm_button.dart';
 import '../../widgets/week_header.dart';
 import 'booking_controller.dart';
@@ -27,11 +28,20 @@ class BookingScreen extends StatefulWidget {
   State<BookingScreen> createState() => _BookingScreenState();
 }
 
-class _BookingScreenState extends State<BookingScreen> {
+class _BookingScreenState extends State<BookingScreen>
+    with WidgetsBindingObserver {
   BookingController? _controller;
   EventType? _eventType;
   ScrollController? _scrollController;
+  LocalDate? _shownDate;
   bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void didChangeDependencies() {
@@ -40,46 +50,94 @@ class _BookingScreenState extends State<BookingScreen> {
     unawaited(_load());
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Back from hours in the background: "now" has moved, so the past
+    // slots and today's pill have to move with it.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_controller?.refresh() ?? Future<void>.value());
+    }
+  }
+
   Future<void> _load() async {
     final deps = AppScope.of(context);
-    final eventType = await deps.eventTypes.getById(widget.eventTypeId);
-    if (eventType == null) {
+    try {
+      final eventType = await deps.eventTypes.getById(widget.eventTypeId);
       if (!mounted) return;
-      setState(() => _loading = false);
+      if (eventType == null) {
+        // The card was deleted while this route sat on the back stack.
+        // There is nothing to book, so leave rather than show an empty
+        // screen with no way out.
+        Navigator.of(context).pop();
+        return;
+      }
+
+      final controller = BookingController(eventType: eventType, deps: deps);
+      await controller.init();
+      if (!mounted) return;
+
+      controller.addListener(_onControllerChanged);
+      setState(() {
+        _eventType = eventType;
+        _controller = controller;
+        _shownDate = controller.selectedDate;
+        _scrollController = ScrollController(
+          initialScrollOffset: initialTimelineOffset(
+            controller.grids[controller.selectedDate] ?? const [],
+          ),
+        );
+        _loading = false;
+      });
+    } catch (_) {
+      // An unreadable card or calendar: say so, with an app bar to leave by.
+      if (!mounted) return;
+      setState(() {
+        _failed = true;
+        _loading = false;
+      });
+    }
+  }
+
+  void _onControllerChanged() {
+    _jumpToSelectedDay();
+    setState(() {});
+  }
+
+  /// Brings each day's own offset into view, the way the screen opened at
+  /// the first day's, so a card that prefers 16:00 on Wednesdays does not
+  /// leave the user scrolling for the cedar edge.
+  ///
+  /// Only on a day change: a slot toggle notifies too, but keeps the day it
+  /// is on. And only when that offset is off screen, so tapping along the
+  /// day strip does not shuffle the rows under the user's eyes when the
+  /// day's first good slot is already in front of them.
+  void _jumpToSelectedDay() {
+    final controller = _controller;
+    final scrollController = _scrollController;
+    if (controller == null || scrollController == null) return;
+    if (controller.selectedDate == _shownDate) return;
+
+    _shownDate = controller.selectedDate;
+    if (!scrollController.hasClients) return;
+
+    final position = scrollController.position;
+    final target = initialTimelineOffset(
+      controller.grids[controller.selectedDate] ?? const [],
+    ).clamp(0.0, position.maxScrollExtent);
+
+    final visibleFrom = position.pixels;
+    final visibleTo = visibleFrom + position.viewportDimension;
+    if (target >= visibleFrom && target + RecurSizes.slotRow <= visibleTo) {
       return;
     }
 
-    final controller = BookingController(eventType: eventType, deps: deps);
-    controller.addListener(_onControllerChanged);
-    await controller.init();
-    if (!mounted) return;
-
-    setState(() {
-      _eventType = eventType;
-      _controller = controller;
-      _scrollController = ScrollController(
-        initialScrollOffset: _initialOffset(controller),
-      );
-      _loading = false;
-    });
+    scrollController.jumpTo(target);
   }
-
-  double _initialOffset(BookingController controller) {
-    final slots = controller.grids[controller.selectedDate] ?? const [];
-    final highlightedIndex = slots.indexWhere(
-      (s) => s.state == SlotState.highlighted,
-    );
-    final eightAmIndex = slots.indexWhere((s) => s.startMinutes == 480);
-    final index = highlightedIndex >= 0
-        ? highlightedIndex
-        : (eightAmIndex >= 0 ? eightAmIndex : 0);
-    return index * RecurSizes.slotRow;
-  }
-
-  void _onControllerChanged() => setState(() {});
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller?.removeListener(_onControllerChanged);
     _scrollController?.dispose();
     super.dispose();
@@ -112,6 +170,12 @@ class _BookingScreenState extends State<BookingScreen> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } on StateError {
+      // The slot's start time passed while Booking was open.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That slot has passed. Pick another.')),
+      );
     } on CalendarWriteException {
       // Nothing was written anywhere.
       if (!mounted) return;
@@ -137,6 +201,22 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_failed) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: RecurSpacing.xxl),
+            child: Text(
+              "Couldn't open this card.",
+              style: RecurText.body,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     final controller = _controller;
     final eventType = _eventType;
     if (_loading || controller == null || eventType == null) {
@@ -167,7 +247,7 @@ class _BookingScreenState extends State<BookingScreen> {
         ),
       ),
       body: needsAccess
-          ? _AccessState(
+          ? AccessState(
               access: controller.access,
               hasWritableCalendar: controller.hasWritableCalendar,
               onRequestAccess: () => controller.requestAccess(),
@@ -242,61 +322,6 @@ class _BookingBody extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Replaces the header, day strip, and timeline (no confirm bar) when
-/// calendar access is missing or there is no writable calendar.
-class _AccessState extends StatelessWidget {
-  const _AccessState({
-    required this.access,
-    required this.hasWritableCalendar,
-    required this.onRequestAccess,
-    required this.onOpenSettings,
-  });
-
-  final CalendarAccess access;
-  final bool hasWritableCalendar;
-  final VoidCallback onRequestAccess;
-  final VoidCallback onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    final String message;
-    String? buttonLabel;
-    VoidCallback? onPressed;
-
-    if (access == CalendarAccess.notDetermined) {
-      message = 'Recur needs calendar access to show your week.';
-      buttonLabel = 'Allow calendar access';
-      onPressed = onRequestAccess;
-    } else if (access == CalendarAccess.denied) {
-      message = 'Calendar access is off for Recur.';
-      buttonLabel = 'Open settings';
-      onPressed = onOpenSettings;
-    } else {
-      message = 'No writable calendar found.';
-    }
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: RecurSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, style: RecurText.body, textAlign: TextAlign.center),
-            if (buttonLabel != null) ...[
-              const SizedBox(height: RecurSpacing.lg),
-              ConfirmButton(
-                label: buttonLabel,
-                onPressed: onPressed,
-                expand: false,
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

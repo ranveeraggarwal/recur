@@ -231,6 +231,28 @@ void main() {
     expect(find.text('Booked'), findsOneWidget);
   });
 
+  testWidgets('a slot that started while the screen sat open is refused', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    await testDeps.deps.eventTypes.upsert(_ptSession());
+    await _pumpBookingPushed(tester, testDeps.deps);
+    await _selectSlot(tester);
+
+    // 09:00 becomes 09:45: the picked 09:30 slot has already started.
+    testDeps.clock.advance(const Duration(minutes: 45));
+
+    await tester.tap(find.widgetWithText(ConfirmButton, 'Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('That slot has passed. Pick another.'), findsOneWidget);
+    expect(testDeps.calendar.created, isEmpty);
+    expect(await testDeps.deps.bookings.getForEventType('et-1'), isEmpty);
+    // The selection is gone and the row now reads as past.
+    expect(find.text('Pick a slot'), findsOneWidget);
+    expect(find.text('Past'), findsWidgets);
+  });
+
   testWidgets(
     'the confirmation sheet auto-dismisses after 2 seconds and pops to Home',
     (WidgetTester tester) async {

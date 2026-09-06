@@ -173,6 +173,141 @@ void main() {
     });
   });
 
+  group('access', () {
+    test('with access denied, init does not read the calendar list', () async {
+      final testDeps = buildTestDeps();
+      testDeps.calendar.access = CalendarAccess.denied;
+      final controller = BookingController(
+        eventType: _ptSession(),
+        deps: testDeps.deps,
+      );
+
+      await controller.init();
+
+      // Listing calendars needs the permission too, so it must wait for
+      // the granted branch; the screen shows its access state instead.
+      expect(controller.access, CalendarAccess.denied);
+      expect(controller.hasWritableCalendar, isFalse);
+      expect(controller.writableCalendarCount, 0);
+      expect(controller.grids, isEmpty);
+    });
+
+    test('requesting access reads the calendar list and the week', () async {
+      final testDeps = buildTestDeps();
+      testDeps.calendar.access = CalendarAccess.notDetermined;
+      testDeps.calendar.accessAfterRequest = CalendarAccess.granted;
+      final controller = BookingController(
+        eventType: _ptSession(),
+        deps: testDeps.deps,
+      );
+      await controller.init();
+      expect(controller.hasWritableCalendar, isFalse);
+
+      await controller.requestAccess();
+
+      expect(controller.hasWritableCalendar, isTrue);
+      expect(controller.grids, hasLength(7));
+    });
+  });
+
+  group('a slot that has passed', () {
+    test('confirm writes nothing, drops the selection, and rebuilds', () async {
+      final testDeps = buildTestDeps(now: DateTime(2026, 9, 7, 9, 58));
+      final controller = BookingController(
+        eventType: _ptSession(),
+        deps: testDeps.deps,
+      );
+      await controller.init();
+      final tenAm = controller.grids[today]!.firstWhere(
+        (s) => s.startMinutes == 600,
+      );
+      expect(tenAm.state, isNot(SlotState.blocked));
+      controller.toggleSlot(tenAm);
+
+      testDeps.clock.advance(const Duration(minutes: 25));
+
+      await expectLater(
+        () => controller.confirm(calendarId: 'cal-1'),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(testDeps.calendar.created, isEmpty);
+      expect(await testDeps.deps.bookings.getForEventType('et-1'), isEmpty);
+      expect(controller.selectedSlot, isNull);
+      final after = controller.grids[today]!.firstWhere(
+        (s) => s.startMinutes == 600,
+      );
+      expect(after.state, SlotState.blocked);
+      expect(after.blockReason, BlockReason.past);
+    });
+  });
+
+  group('refresh', () {
+    test('recomputes today and rebuilds the week over midnight', () async {
+      final testDeps = buildTestDeps(now: DateTime(2026, 9, 7, 23, 59));
+      final controller = BookingController(
+        eventType: _ptSession(),
+        deps: testDeps.deps,
+      );
+      await controller.init();
+      final tuesday = today.addDays(1);
+      controller.selectDate(tuesday);
+      expect(controller.today, today);
+
+      testDeps.clock.advance(const Duration(minutes: 2));
+      await controller.refresh();
+
+      expect(controller.today, tuesday);
+      expect(
+        controller.grids[today]!.every(
+          (s) => s.blockReason == BlockReason.past,
+        ),
+        isTrue,
+      );
+      expect(controller.selectedDate, tuesday);
+    });
+
+    test('selectDate refreshes only once the day has rolled over', () async {
+      final testDeps = buildTestDeps(now: DateTime(2026, 9, 7, 23, 59));
+      final controller = BookingController(
+        eventType: _ptSession(),
+        deps: testDeps.deps,
+      );
+      await controller.init();
+      final queriesAfterInit = testDeps.calendar.busyQueries.length;
+
+      controller.selectDate(today.addDays(2));
+      await pumpEventQueue();
+
+      // Same day still: no calendar fetch per tap.
+      expect(testDeps.calendar.busyQueries, hasLength(queriesAfterInit));
+      expect(controller.today, today);
+
+      testDeps.clock.advance(const Duration(minutes: 2));
+      controller.selectDate(today.addDays(3));
+      await pumpEventQueue();
+
+      expect(testDeps.calendar.busyQueries.length, queriesAfterInit + 1);
+      expect(controller.today, today.addDays(1));
+    });
+
+    test('refresh without access moves today but reads nothing', () async {
+      final testDeps = buildTestDeps(now: DateTime(2026, 9, 7, 23, 59));
+      testDeps.calendar.access = CalendarAccess.denied;
+      final controller = BookingController(
+        eventType: _ptSession(),
+        deps: testDeps.deps,
+      );
+      await controller.init();
+
+      testDeps.clock.advance(const Duration(minutes: 2));
+      await controller.refresh();
+
+      expect(controller.today, today.addDays(1));
+      expect(testDeps.calendar.busyQueries, isEmpty);
+    });
+  });
+
   group('showWeek', () {
     test('fetches the queried range for the new week', () async {
       final testDeps = buildTestDeps();
