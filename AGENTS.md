@@ -95,6 +95,8 @@ the pull request.
 - Nothing touches the real calendar plugin except
   `lib/calendar/device_calendar_gateway.dart`. Every screen and every test
   uses `FakeCalendarGateway`.
+- Nothing talks to Nominatim except `lib/places/nominatim_places_gateway.dart`.
+  Every screen and every test uses `FakePlacesGateway`.
 - No new dependencies unless the issue you are working on names them.
 - No accounts, cloud, notifications, or editing/deleting calendar events.
 - Copy is plain. Never the words "flow", "ritual", "breathe". No all-caps.

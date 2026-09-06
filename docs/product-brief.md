@@ -14,14 +14,17 @@ the card, see a week of your real calendar with the good slots lit up, tap
 one, tap Confirm. Recur writes the event to your phone calendar and notes
 that you booked it. Next time, the suggestions are a little smarter.
 
-That is the whole app. Android only. Everything stays on the phone.
+That is the whole app. Android only. Everything stays on the phone. The
+only thing that ever leaves it is the text you type into a location field,
+which is sent to OpenStreetMap to suggest an address, and you can ignore
+the suggestions.
 
 ## What it will never do
 
-No accounts. No cloud. No notifications. It never edits or deletes anything
-in your calendar, it only adds. No recurring events, no machine learning,
-no settings screen, no dark mode. If a feature is not on this page, it is
-not in the app.
+No accounts, no sync, no cloud storage. No notifications. It never edits or
+deletes anything in your calendar, it only adds. No recurring events, no
+machine learning, no settings screen, no dark mode. If a feature is not on
+this page, it is not in the app.
 
 ## The four screens
 

@@ -20,6 +20,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   of the real calendar, and a location or notes missing from the event
   you tap is taken from the most recent event of the same name that has
   them.
+- Editor: the Location field suggests addresses as you type, looked up
+  from OpenStreetMap. This is the app's only network use; a failed lookup
+  just means no suggestions, and the field still works as plain text.
 
 ## 1.0.0 - 2026-09-05
 
