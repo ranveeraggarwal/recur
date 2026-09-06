@@ -15,6 +15,10 @@ import '../booking/booking_screen.dart';
 import '../booking/calendar_picker_sheet.dart';
 import '../editor/editor_screen.dart';
 
+/// Height of one Home grid tile at text scale 1. Multiplied by the current
+/// text scale so a card that grows with the system font size still fits.
+const double _cardHeight = 148;
+
 /// The app's landing screen: a two-column grid of cards, one per event
 /// type, or an empty state when there are none.
 ///
@@ -43,23 +47,65 @@ class _HomeLoad {
   final int writableCalendarCount;
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   AppDependencies? _deps;
-  Future<_HomeLoad>? _future;
+
+  /// The last load that succeeded, kept while the next one runs so a reload
+  /// never blanks an already-drawn grid.
+  _HomeLoad? _data;
+
+  /// Set when the most recent load threw, cleared when one succeeds.
+  Object? _error;
+
+  /// Bumped by every [_reload] so a slow earlier load cannot overwrite the
+  /// result of a later one.
+  int _loadGeneration = 0;
+
+  bool _loadStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _deps = AppScope.of(context);
-    _future ??= _load();
+    if (!_loadStarted) {
+      _loadStarted = true;
+      unawaited(_reload());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed || !mounted) {
+      return;
+    }
+    // A resume while Booking or the Editor is on top would reload Home
+    // underneath for nothing; those screens reload it when they pop.
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    unawaited(_reload());
   }
 
   Future<_HomeLoad> _load() async {
     final deps = _deps!;
-    if (await deps.calendar.checkAccess() == CalendarAccess.notDetermined) {
+    var access = await deps.calendar.checkAccess();
+    if (access == CalendarAccess.notDetermined) {
       // Not asked yet: show the OS permission dialog now, rather than
       // waiting for the user to open Booking.
-      await deps.calendar.requestAccess();
+      access = await deps.calendar.requestAccess();
     }
 
     // An event deleted in the calendar app leaves its booking behind, so
@@ -75,16 +121,37 @@ class _HomeScreenState extends State<HomeScreen> {
       final latest = await deps.bookings.latestForEventType(eventType.id);
       cards.add(_HomeCard(eventType: eventType, latestStart: latest?.start));
     }
-    final calendars = await deps.calendar.listWritableCalendars();
-    return _HomeLoad(cards: cards, writableCalendarCount: calendars.length);
+
+    // Listing calendars without access throws on a real phone, so only ask
+    // when access was granted.
+    final writableCalendarCount = access == CalendarAccess.granted
+        ? (await deps.calendar.listWritableCalendars()).length
+        : 0;
+    return _HomeLoad(
+      cards: cards,
+      writableCalendarCount: writableCalendarCount,
+    );
   }
 
   Future<void> _reload() async {
-    final future = _load();
-    setState(() {
-      _future = future;
-    });
-    await future;
+    final generation = ++_loadGeneration;
+    try {
+      final data = await _load();
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      setState(() {
+        _data = data;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      setState(() {
+        _error = error;
+      });
+    }
   }
 
   Future<void> _openEditor(String? eventTypeId) async {
@@ -109,33 +176,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_HomeLoad>(
-      future: _future,
-      builder: (context, snapshot) {
-        final data = snapshot.data;
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Recur', style: RecurText.display),
-            actions: [
-              if ((data?.writableCalendarCount ?? 0) >= 2)
-                IconButton(
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  tooltip: 'Choose calendar',
-                  onPressed: () => unawaited(showCalendarPicker(context)),
-                ),
-            ],
+    final data = _data;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recur', style: RecurText.display),
+        actions: [
+          if ((data?.writableCalendarCount ?? 0) >= 2)
+            IconButton(
+              icon: const Icon(Icons.calendar_today_outlined),
+              tooltip: 'Choose calendar',
+              onPressed: () => unawaited(showCalendarPicker(context)),
+            ),
+        ],
+      ),
+      body: _error != null
+          ? const _HomeReadError()
+          : _HomeBody(
+              data: data,
+              clock: _deps!.clock,
+              onOpenBooking: (id) => unawaited(_openBooking(id)),
+              onOpenEditor: (id) => unawaited(_openEditor(id)),
+            ),
+      floatingActionButton: RecurFab(
+        onPressed: () => unawaited(_openEditor(null)),
+      ),
+    );
+  }
+}
+
+/// Shown when the stored cards could not be read, in place of the grid.
+class _HomeReadError extends StatelessWidget {
+  const _HomeReadError();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text("Couldn't read your cards.", style: RecurText.title),
+          const SizedBox(height: RecurSpacing.sm),
+          Text(
+            'Restart Recur to try again.',
+            style: RecurText.body.copyWith(color: RecurColors.muted),
           ),
-          body: _HomeBody(
-            data: data,
-            clock: _deps!.clock,
-            onOpenBooking: (id) => unawaited(_openBooking(id)),
-            onOpenEditor: (id) => unawaited(_openEditor(id)),
-          ),
-          floatingActionButton: RecurFab(
-            onPressed: () => unawaited(_openEditor(null)),
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -182,14 +268,17 @@ class _HomeBody extends StatelessWidget {
     }
 
     final now = clock.now();
+    // The card's content grows with the system font size, so the tile has
+    // to grow with it too; a fixed aspect ratio overflows at 1.3 and up.
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
 
     return GridView.builder(
       padding: const EdgeInsets.all(RecurSpacing.lg),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: RecurSpacing.lg,
         mainAxisSpacing: RecurSpacing.lg,
-        childAspectRatio: 166 / 148,
+        mainAxisExtent: _cardHeight * textScale,
       ),
       itemCount: data.cards.length,
       itemBuilder: (context, index) {
