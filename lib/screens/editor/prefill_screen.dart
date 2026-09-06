@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
 import '../../calendar/calendar_gateway.dart';
+import '../../core/formatting.dart';
 import '../../core/local_date.dart';
 import '../../core/time_of_day_minutes.dart';
 import '../../theme/tokens.dart';
@@ -14,16 +15,6 @@ import 'event_prefill.dart';
 /// week that was actually read.
 const Duration prefillLookBack = Duration(days: 90);
 const Duration prefillLookAhead = Duration(days: 30);
-
-const List<String> _weekdayLabels = [
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-  'Sun',
-];
 
 /// One hour of the timeline. Twice a Booking slot row, so an hour here is
 /// as tall as the two 30-minute rows it would be over there.
@@ -165,7 +156,7 @@ class _PrefillScreenState extends State<PrefillScreen> {
   Widget _pillFor(int index) {
     final date = _weekMonday.addDays(index);
     return DayPill(
-      weekdayLabel: _weekdayLabels[index],
+      weekdayLabel: weekdayAbbrev[index],
       dayNumber: date.day,
       selected: date == _selectedDate,
       // Every day is pickable here: copying looks backwards, so a past

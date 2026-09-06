@@ -4,7 +4,9 @@ library;
 import 'local_date.dart';
 import 'time_of_day_minutes.dart';
 
-const List<String> _weekdayAbbrev = [
+/// Weekday abbreviations, Monday first. Index with `weekday - 1` for a
+/// `DateTime`-style weekday (1 = Monday .. 7 = Sunday).
+const List<String> weekdayAbbrev = [
   'Mon',
   'Tue',
   'Wed',
@@ -37,7 +39,7 @@ String formatTime(int minutesOfDay) => formatMinutes(minutesOfDay);
 
 /// Formats [date] as `Tue 8 Sep`.
 String formatDayShort(LocalDate date) {
-  final weekday = _weekdayAbbrev[date.weekday - 1];
+  final weekday = weekdayAbbrev[date.weekday - 1];
   final month = _monthAbbrev[date.month - 1];
   return '$weekday ${date.day} $month';
 }

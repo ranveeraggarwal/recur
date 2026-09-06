@@ -1,19 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/formatting.dart';
 import '../../core/local_date.dart';
 import '../../suggestions/slot_grid.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/day_pill.dart';
-
-const List<String> _weekdayLabels = [
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-  'Sun',
-];
 
 /// The seven-day row of [DayPill]s for the week starting [weekMonday].
 ///
@@ -52,7 +43,7 @@ class DayStrip extends StatelessWidget {
     final hasSuggestions = slots.any((s) => s.state == SlotState.highlighted);
 
     return DayPill(
-      weekdayLabel: _weekdayLabels[i],
+      weekdayLabel: weekdayAbbrev[i],
       dayNumber: date.day,
       selected: date == selectedDate,
       enabled: date.compareTo(today) >= 0,
