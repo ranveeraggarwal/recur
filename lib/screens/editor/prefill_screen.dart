@@ -143,8 +143,10 @@ class _PrefillScreenState extends State<PrefillScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: RecurSpacing.lg),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [for (var i = 0; i < 7; i++) _pillFor(i)],
+            children: [
+              for (var i = 0; i < 7; i++)
+                Expanded(child: Center(child: _pillFor(i))),
+            ],
           ),
         ),
         const SizedBox(height: RecurSpacing.md),
