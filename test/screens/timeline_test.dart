@@ -123,6 +123,36 @@ void main() {
     }
   });
 
+  testWidgets('the hour gutter is not read on top of the tile', (tester) async {
+    final handle = tester.ensureSemantics();
+    final slots = [
+      _slot(540),
+      _slot(570),
+      _slot(
+        600,
+        state: SlotState.blocked,
+        blockReason: BlockReason.conflict,
+        blockingTitle: 'Dentist',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Timeline(slots: slots, selectedSlot: null, onToggle: (_) {}),
+        ),
+      ),
+    );
+
+    // 09:00 and 10:00 are hour marks, so the gutter draws their time as
+    // well. Only the tile's own label should carry it.
+    expect(find.bySemanticsLabel('09:00'), findsNothing);
+    expect(find.bySemanticsLabel('10:00'), findsNothing);
+    expect(find.bySemanticsLabel('09:00, available'), findsOneWidget);
+    expect(find.bySemanticsLabel('10:00, busy: Dentist'), findsOneWidget);
+    handle.dispose();
+  });
+
   testWidgets('a slot that does not fit cannot be tapped', (tester) async {
     var toggled = false;
     final slots = [

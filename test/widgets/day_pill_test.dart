@@ -49,6 +49,116 @@ void main() {
     });
   });
 
+  group('DayPill semantics', () {
+    Future<void> pumpPill(
+      WidgetTester tester, {
+      String weekdayLabel = 'Tue',
+      int dayNumber = 8,
+      bool selected = false,
+      bool enabled = true,
+      bool hasSuggestions = false,
+      bool isToday = false,
+    }) async {
+      await pumpGolden(
+        tester,
+        DayPill(
+          weekdayLabel: weekdayLabel,
+          dayNumber: dayNumber,
+          selected: selected,
+          enabled: enabled,
+          hasSuggestions: hasSuggestions,
+          isToday: isToday,
+          onTap: () {},
+        ),
+        height: 80,
+      );
+    }
+
+    testWidgets('a plain pill reads the full weekday and the day', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpPill(tester);
+
+      expect(
+        tester.getSemantics(find.byType(DayPill)),
+        matchesSemantics(
+          label: 'Tuesday 8',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasSelectedState: true,
+          isSelected: false,
+          hasTapAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('today, the dot and the selection are all read', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpPill(
+        tester,
+        selected: true,
+        hasSuggestions: true,
+        isToday: true,
+      );
+
+      expect(
+        tester.getSemantics(find.byType(DayPill)),
+        matchesSemantics(
+          label: 'Tuesday 8, today, has good slots',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasSelectedState: true,
+          isSelected: true,
+          hasTapAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('a past pill reads as disabled and claims no good slots', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpPill(
+        tester,
+        weekdayLabel: 'Mon',
+        dayNumber: 7,
+        enabled: false,
+        hasSuggestions: true,
+      );
+
+      expect(
+        tester.getSemantics(find.byType(DayPill)),
+        matchesSemantics(
+          label: 'Monday 7',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: false,
+          hasSelectedState: true,
+          isSelected: false,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('the weekday and the day number are not read twice', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpPill(tester);
+
+      expect(find.bySemanticsLabel('Tue'), findsNothing);
+      expect(find.bySemanticsLabel('8'), findsNothing);
+      handle.dispose();
+    });
+  });
+
   testWidgets('day_pill_states golden', (tester) async {
     await pumpGolden(
       tester,

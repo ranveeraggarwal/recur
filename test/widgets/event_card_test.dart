@@ -150,6 +150,84 @@ void main() {
     });
   });
 
+  group('semantics', () {
+    testWidgets('a card reads as one button with a hint about editing', (
+      WidgetTester tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpGolden(
+        tester,
+        buildCard(
+          name: 'PT session',
+          durationMinutes: 60,
+          location: 'Kungsholmen',
+          lastBookedText: 'Last booked 3 weeks ago',
+        ),
+        height: 220,
+      );
+
+      expect(
+        tester.getSemantics(find.byType(EventCard)),
+        matchesSemantics(
+          label: 'PT session, 60 min, Kungsholmen, Last booked 3 weeks ago',
+          hint: 'Double tap to book, double tap and hold to edit',
+          isButton: true,
+          hasTapAction: true,
+          hasLongPressAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('a card without a location leaves it out of the label', (
+      WidgetTester tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpGolden(
+        tester,
+        buildCard(
+          name: 'Massage',
+          durationMinutes: 45,
+          lastBookedText: 'Not booked yet',
+        ),
+        height: 220,
+      );
+
+      expect(
+        tester.getSemantics(find.byType(EventCard)),
+        matchesSemantics(
+          label: 'Massage, 45 min, Not booked yet',
+          hint: 'Double tap to book, double tap and hold to edit',
+          isButton: true,
+          hasTapAction: true,
+          hasLongPressAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('the lines are not read again one by one', (
+      WidgetTester tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await pumpGolden(
+        tester,
+        buildCard(
+          name: 'PT session',
+          durationMinutes: 60,
+          location: 'Kungsholmen',
+          lastBookedText: 'Last booked 3 weeks ago',
+        ),
+        height: 220,
+      );
+
+      expect(find.bySemanticsLabel('PT session'), findsNothing);
+      expect(find.bySemanticsLabel('Kungsholmen'), findsNothing);
+      expect(find.bySemanticsLabel('Last booked 3 weeks ago'), findsNothing);
+      handle.dispose();
+    });
+  });
+
   testWidgets('location is omitted when null', (WidgetTester tester) async {
     await pumpGolden(
       tester,
