@@ -95,8 +95,8 @@ EventPrefill? prefillFor({
   final weekdays = <int>{};
   for (final occurrence in occurrences) {
     weekdays.add(occurrence.start.weekday);
-    final start = _roundDown(minutesOfDay(occurrence.start));
-    final end = _roundUp(_endMinutesOf(occurrence));
+    final start = roundDownToSlot(minutesOfDay(occurrence.start));
+    final end = roundUpToSlot(_endMinutesOf(occurrence));
     if (start < earliest) earliest = start;
     if (end > latestEnd) latestEnd = end;
   }
@@ -144,7 +144,7 @@ int _endMinutesOf(CalendarEvent event) {
 /// A window covering `[earliest, latest)`, pulled inside 06:00-22:00 and
 /// widened if needed so an appointment of [duration] fits.
 TimeWindow _windowFor(int earliest, int latest, int duration) {
-  final span = _roundUp(duration);
+  final span = roundUpToSlot(duration);
   var start = earliest.clamp(dayStartMinutes, dayEndMinutes - span);
   var end = latest.clamp(dayStartMinutes, dayEndMinutes);
   if (end < start + span) end = start + span;
@@ -158,13 +158,6 @@ TimeWindow _windowFor(int earliest, int latest, int duration) {
 int _roundToFive(int minutes) {
   final rounded = ((minutes / 5).round()) * 5;
   return rounded.clamp(5, 480);
-}
-
-int _roundDown(int minutes) => minutes - (minutes % slotMinutes);
-
-int _roundUp(int minutes) {
-  final remainder = minutes % slotMinutes;
-  return remainder == 0 ? minutes : minutes + (slotMinutes - remainder);
 }
 
 String? _clip(String? value, int max) {

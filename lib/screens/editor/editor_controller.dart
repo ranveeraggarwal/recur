@@ -13,11 +13,6 @@ import 'event_prefill.dart';
 /// The durations the Editor offers as pills; anything else is "Custom".
 const List<int> editorPresetDurations = [30, 45, 60, 90];
 
-int _roundUpToSlot(int minutes) {
-  final remainder = minutes % slotMinutes;
-  return remainder == 0 ? minutes : minutes + (slotMinutes - remainder);
-}
-
 /// Draft state for the Editor screen: one event type being created or
 /// edited, with live validation, [save], and [delete].
 ///
@@ -218,7 +213,7 @@ class EditorController extends ChangeNotifier {
   }
 
   TimeWindow _nextWindow() {
-    final span = _roundUpToSlot(
+    final span = roundUpToSlot(
       durationMinutes < slotMinutes ? slotMinutes : durationMinutes,
     );
     final previousEnd = windows.isEmpty ? 480 : windows.last.endMinutes;

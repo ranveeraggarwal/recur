@@ -3,6 +3,8 @@
 /// `docs/architecture.md`, section "Suggestion engine".
 library;
 
+import 'package:flutter/foundation.dart';
+
 import '../core/time_window.dart';
 
 /// A set of weekdays plus one or more time-of-day spans. A slot is
@@ -31,7 +33,7 @@ final class SuggestionWindow {
   @override
   bool operator ==(Object other) =>
       other is SuggestionWindow &&
-      _setEquals(other.weekdays, weekdays) &&
+      setEquals(other.weekdays, weekdays) &&
       timeWindowListEquals(other.windows, windows);
 
   @override
@@ -41,12 +43,4 @@ final class SuggestionWindow {
   @override
   String toString() =>
       'SuggestionWindow(weekdays: $weekdays, windows: $windows)';
-}
-
-bool _setEquals(Set<int> a, Set<int> b) {
-  if (a.length != b.length) return false;
-  for (final value in a) {
-    if (!b.contains(value)) return false;
-  }
-  return true;
 }

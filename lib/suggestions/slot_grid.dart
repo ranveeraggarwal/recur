@@ -5,6 +5,7 @@ library;
 
 import '../calendar/calendar_gateway.dart';
 import '../core/local_date.dart';
+import '../core/time_of_day_minutes.dart';
 import 'suggestion_window.dart';
 
 /// Whether a [Slot] can be booked.
@@ -58,10 +59,6 @@ final class Slot {
       'blockingTitle: $blockingTitle)';
 }
 
-const int _dayStartMinutes = 360; // 06:00
-const int _dayEndMinutes = 1320; // 22:00
-const int _stepMinutes = 30;
-
 /// Builds the 32 slots for [date], each spanning [durationMinutes] starting
 /// every 30 minutes from 06:00 to 21:30.
 ///
@@ -81,9 +78,9 @@ List<Slot> buildSlotGrid({
 }) {
   final slots = <Slot>[];
   for (
-    var startMinutes = _dayStartMinutes;
-    startMinutes < _dayEndMinutes;
-    startMinutes += _stepMinutes
+    var startMinutes = dayStartMinutes;
+    startMinutes < dayEndMinutes;
+    startMinutes += slotMinutes
   ) {
     final endMinutes = startMinutes + durationMinutes;
     final slotStart = date.at(startMinutes);
@@ -101,7 +98,7 @@ List<Slot> buildSlotGrid({
       continue;
     }
 
-    if (endMinutes > _dayEndMinutes) {
+    if (endMinutes > dayEndMinutes) {
       slots.add(
         Slot(
           date: date,
@@ -115,7 +112,7 @@ List<Slot> buildSlotGrid({
     }
 
     final slotEnd = date.at(endMinutes);
-    final rowEnd = date.at(startMinutes + _stepMinutes);
+    final rowEnd = date.at(startMinutes + slotMinutes);
 
     // The earliest event the appointment would overlap, and the earliest
     // event covering this row's own 30 minutes. They differ when the

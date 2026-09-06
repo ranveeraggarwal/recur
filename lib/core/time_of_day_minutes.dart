@@ -23,3 +23,14 @@ String formatMinutes(int minutesOfDay) {
 
 /// The number of minutes since midnight for the time-of-day portion of [dt].
 int minutesOfDay(DateTime dt) => dt.hour * 60 + dt.minute;
+
+/// Rounds [minutes] down to the slot mark at or below it, e.g.
+/// `roundDownToSlot(605) == 600`.
+int roundDownToSlot(int minutes) => minutes - (minutes % slotMinutes);
+
+/// Rounds [minutes] up to the slot mark at or above it, e.g.
+/// `roundUpToSlot(605) == 630`. A value already on a mark is unchanged.
+int roundUpToSlot(int minutes) {
+  final remainder = minutes % slotMinutes;
+  return remainder == 0 ? minutes : minutes + (slotMinutes - remainder);
+}

@@ -12,16 +12,6 @@ import 'editor_controller.dart';
 import 'event_prefill.dart';
 import 'prefill_screen.dart';
 
-const List<String> _weekdayLabels = [
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-  'Sun',
-];
-
 /// A form for creating or editing one event type.
 ///
 /// Pass `eventTypeId: null` for a new card, or an existing id to edit it.
@@ -343,7 +333,7 @@ class _WeekdayGroup extends StatelessWidget {
             for (var i = 0; i < 7; i++)
               IntrinsicWidth(
                 child: DurationPill(
-                  label: _weekdayLabels[i],
+                  label: weekdayAbbrev[i],
                   selected: controller.weekdays.contains(i + 1),
                   onTap: () => controller.toggleWeekday(i + 1),
                 ),
