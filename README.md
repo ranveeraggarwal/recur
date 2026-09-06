@@ -14,7 +14,8 @@ creates one, and every booking is a single, one-off event, never a
 recurring series. There is no machine learning, just a fixed rule set for
 suggesting slots. There is no settings screen beyond a calendar picker that
 only appears when the phone has more than one writable calendar. The app is
-Android only, with one light theme.
+Android only, with one light theme. The only network access is an optional
+address lookup while typing a location, used to suggest matching places.
 
 ## Requirements
 
