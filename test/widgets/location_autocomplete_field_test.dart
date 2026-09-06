@@ -82,4 +82,51 @@ void main() {
 
     expect(controller.text.length, 80);
   });
+
+  testWidgets('picking a suggestion does not search again or reopen the list', (
+    tester,
+  ) async {
+    final places = FakePlacesGateway()
+      ..results = [
+        const PlaceSuggestion(description: 'Vasagatan 1, Stockholm'),
+      ];
+    await pumpField(tester, places);
+
+    await tester.enterText(find.byType(TextField), 'Vasa');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Vasagatan 1, Stockholm'));
+    await tester.pump();
+
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byType(ListTile), findsNothing);
+    expect(places.queries.length, 1);
+  });
+
+  testWidgets('a programmatic text change while unfocused does not search', (
+    tester,
+  ) async {
+    final places = FakePlacesGateway();
+    final controller = await pumpField(tester, places);
+
+    controller.text = 'Vasagatan 1';
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(places.queries, isEmpty);
+  });
+
+  testWidgets('losing focus cancels a pending search', (tester) async {
+    final places = FakePlacesGateway()
+      ..results = [
+        const PlaceSuggestion(description: 'Kungsholmen, Stockholm, Sweden'),
+      ];
+    await pumpField(tester, places);
+
+    await tester.enterText(find.byType(TextField), 'Kun');
+    await tester.pump(const Duration(milliseconds: 100));
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byType(ListTile), findsNothing);
+  });
 }

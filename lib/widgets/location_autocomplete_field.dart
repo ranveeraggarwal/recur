@@ -52,12 +52,17 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   }
 
   void _onFocusChanged() {
-    if (!_focusNode.hasFocus && _suggestions.isNotEmpty) {
-      setState(() => _suggestions = []);
+    if (!_focusNode.hasFocus) {
+      _debounce?.cancel();
+      _requestId++;
+      if (_suggestions.isNotEmpty) {
+        setState(() => _suggestions = []);
+      }
     }
   }
 
   void _onTextChanged() {
+    if (!_focusNode.hasFocus) return;
     _debounce?.cancel();
     final query = widget.controller.text.trim();
     if (query.length < 3) {
@@ -78,6 +83,8 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
     final description = suggestion.description.length > _maxLocationLength
         ? suggestion.description.substring(0, _maxLocationLength)
         : suggestion.description;
+    _debounce?.cancel();
+    _requestId++;
     widget.controller
       ..text = description
       ..selection = TextSelection.collapsed(offset: description.length);
