@@ -131,6 +131,43 @@ void main() {
 
       expect(() => EventType.fromJson(json), throwsA(isA<FormatException>()));
     });
+
+    test('fromJson throws FormatException, not a TypeError, on a non-int '
+        'weekday', () {
+      final json = _sample().toJson()..['preferredWeekdays'] = [1, '3'];
+
+      expect(() => EventType.fromJson(json), throwsA(isA<FormatException>()));
+    });
+
+    test('fromJson throws FormatException on a weekday outside 1..7', () {
+      final json = _sample().toJson()..['preferredWeekdays'] = [0];
+
+      expect(() => EventType.fromJson(json), throwsA(isA<FormatException>()));
+    });
+
+    test('fromJson throws FormatException on an empty preferredWeekdays '
+        'list', () {
+      final json = _sample().toJson()..['preferredWeekdays'] = <int>[];
+
+      expect(() => EventType.fromJson(json), throwsA(isA<FormatException>()));
+    });
+
+    test('fromJson normalises an empty location to null without '
+        'asserting', () {
+      final json = _sample().toJson()..['location'] = '';
+
+      final decoded = EventType.fromJson(json);
+
+      expect(decoded.location, isNull);
+    });
+
+    test('fromJson normalises an empty notes to null without asserting', () {
+      final json = _sample().toJson()..['notes'] = '';
+
+      final decoded = EventType.fromJson(json);
+
+      expect(decoded.notes, isNull);
+    });
   });
 
   group('EventType equality and hashCode', () {

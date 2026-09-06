@@ -186,13 +186,27 @@ final class EventType {
       'preferredWeekdays',
       'EventType',
     );
+    final preferredWeekdays = <int>{};
+    for (final entry in weekdaysRaw) {
+      if (entry is! int || entry < 1 || entry > 7) {
+        throw const FormatException(
+          'Key "preferredWeekdays" in EventType JSON has the wrong type.',
+        );
+      }
+      preferredWeekdays.add(entry);
+    }
+    if (preferredWeekdays.isEmpty) {
+      throw const FormatException(
+        'Key "preferredWeekdays" in EventType JSON has the wrong type.',
+      );
+    }
     return EventType(
       id: _require<String>(json, 'id', 'EventType'),
       name: _require<String>(json, 'name', 'EventType'),
       durationMinutes: _require<int>(json, 'durationMinutes', 'EventType'),
-      location: json['location'] as String?,
-      notes: json['notes'] as String?,
-      preferredWeekdays: weekdaysRaw.map((e) => e as int).toSet(),
+      location: _normalise(json['location'] as String?),
+      notes: _normalise(json['notes'] as String?),
+      preferredWeekdays: preferredWeekdays,
       preferredWindows: _windowsFrom(json),
       createdAt: DateTime.parse(
         _require<String>(json, 'createdAt', 'EventType'),
@@ -251,6 +265,15 @@ List<TimeWindow> _windowsFrom(Map<String, dynamic> json) {
       endMinutes: _require<int>(json, 'preferredEndMinutes', 'EventType'),
     ),
   ];
+}
+
+/// Trims [value] and treats an empty result as `null`, so a hand-edited or
+/// older file's `""` normalises instead of tripping the constructor's
+/// non-empty assert.
+String? _normalise(String? value) {
+  if (value == null) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }
 
 bool _setEquals(Set<int> a, Set<int> b) {
