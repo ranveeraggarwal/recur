@@ -4,11 +4,13 @@ Recur is an Android app for booking irregular recurring appointments, like
 physio or a trainer, into your phone calendar. You keep a card for each kind
 of appointment; when it is time to rebook, Recur shows you a week of your
 real calendar with the good slots lit up, and writes one event when you
-confirm. All data stays on the phone.
+confirm. All data stays on the phone. The only thing that ever leaves it is
+the text you type into a location field, which is sent to OpenStreetMap to
+suggest an address, and you can ignore the suggestions.
 
 ## What it is not
 
-Recur has no accounts, sign-in, sync, or cloud of any kind. It has no
+Recur has no accounts, sign-in, sync, or cloud storage of any kind. It has no
 notifications or reminders. It never edits or deletes a calendar event, only
 creates one, and every booking is a single, one-off event, never a
 recurring series. There is no machine learning, just a fixed rule set for
