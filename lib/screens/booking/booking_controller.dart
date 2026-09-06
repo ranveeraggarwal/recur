@@ -2,6 +2,8 @@
 // field, so it can't become an initializing formal.
 // ignore_for_file: prefer_initializing_formals
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../app_scope.dart';
@@ -40,7 +42,8 @@ class BookingController extends ChangeNotifier {
   bool _initialized = false;
   bool get initialized => _initialized;
 
-  /// Today, fixed at [init] time via the app's [Clock].
+  /// Today, read from the app's [Clock] at [init] time and recomputed by
+  /// [refresh] when the screen comes back or a day has rolled over.
   late LocalDate today;
 
   /// The Monday of the displayed week.
@@ -63,10 +66,13 @@ class BookingController extends ChangeNotifier {
     selectedDate = today;
 
     access = await _deps.calendar.checkAccess();
-    await _refreshCalendars();
     _settings = await _deps.settings.get();
 
     if (access == CalendarAccess.granted) {
+      // Listing calendars needs the permission too: without it the real
+      // gateway throws and the screen never gets to its access state.
+      await _refreshCalendars();
+
       // A booking whose calendar event the user deleted should stop
       // steering the suggestions.
       await pruneVanishedBookings(
@@ -147,9 +153,26 @@ class BookingController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Recomputes [today] from the clock and rebuilds the displayed week, so
+  /// a screen left open across midnight (or in the back stack for hours)
+  /// stops offering slots that have since passed.
+  Future<void> refresh() async {
+    today = LocalDate.fromDateTime(_deps.clock.now());
+    if (access != CalendarAccess.granted) {
+      notifyListeners();
+      return;
+    }
+    await showWeek(weekMonday);
+  }
+
   void selectDate(LocalDate date) {
     selectedDate = date;
     notifyListeners();
+    // A cheap check, so a day that rolled over while the screen sat open
+    // is caught on the next tap without a calendar fetch per tap.
+    if (LocalDate.fromDateTime(_deps.clock.now()) != today) {
+      unawaited(refresh());
+    }
   }
 
   void toggleSlot(Slot slot) {
@@ -195,11 +218,22 @@ class BookingController extends ChangeNotifier {
   /// and error-handling contract: if the calendar write throws, nothing is
   /// logged and the exception propagates; if the booking log then fails,
   /// the calendar event is left in place (never deleted) and the exception
-  /// still propagates.
+  /// still propagates. A slot whose start has already passed is never
+  /// written: the week is rebuilt, the selection dropped, and a
+  /// [StateError] thrown for the screen to report.
   Future<Booking> confirm({required String calendarId}) async {
     final slot = selectedSlot;
     if (slot == null) {
       throw StateError('confirm() requires a selected slot.');
+    }
+
+    if (!slot.start.isAfter(_deps.clock.now())) {
+      // The screen can sit open long enough for the picked slot to start.
+      // Drop the selection and rebuild the week, so the row now reads as
+      // past, and let the screen say so.
+      selectedSlot = null;
+      await showWeek(weekMonday);
+      throw StateError('The selected slot has already started.');
     }
 
     isConfirming = true;

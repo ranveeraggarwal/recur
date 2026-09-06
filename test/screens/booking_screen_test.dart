@@ -6,6 +6,8 @@ import 'package:recur/core/local_date.dart';
 import 'package:recur/core/time_window.dart';
 import 'package:recur/data/models/event_type.dart';
 import 'package:recur/screens/booking/booking_screen.dart';
+import 'package:recur/screens/booking/timeline.dart';
+import 'package:recur/theme/tokens.dart';
 import 'package:recur/widgets/day_pill.dart';
 import 'package:recur/widgets/slot_tile.dart';
 
@@ -24,6 +26,54 @@ EventType _ptSession() {
     createdAt: DateTime(2020, 1, 1),
   );
 }
+
+/// `Late PT`, 60 min, preferred Wednesdays only, 16:00-18:00.
+EventType _wednesdayAfternoon() {
+  return EventType(
+    id: 'et-1',
+    name: 'Late PT',
+    durationMinutes: 60,
+    preferredWeekdays: const {3},
+    preferredWindows: [TimeWindow(startMinutes: 960, endMinutes: 1080)],
+    createdAt: DateTime(2020, 1, 1),
+  );
+}
+
+/// Pushes [BookingScreen] on top of a root screen, so a test can see the
+/// route pop.
+Future<void> _pumpBookingPushed(
+  WidgetTester tester,
+  TestDeps testDeps, {
+  String eventTypeId = 'et-1',
+}) async {
+  await tester.pumpWidget(
+    AppScope(
+      deps: testDeps.deps,
+      child: MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => BookingScreen(eventTypeId: eventTypeId),
+                  ),
+                ),
+                child: const Text('home'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('home'));
+  await tester.pumpAndSettle();
+}
+
+double _timelineOffset(WidgetTester tester) =>
+    tester.widget<Timeline>(find.byType(Timeline)).scrollController!.offset;
 
 Future<void> _pumpBooking(WidgetTester tester, TestDeps testDeps) async {
   await tester.pumpWidget(
@@ -105,6 +155,108 @@ void main() {
         .widgetList<DayPill>(find.byType(DayPill))
         .firstWhere((p) => p.weekdayLabel == 'Tue');
     expect(tuesdayPillAfter.selected, isTrue);
+  });
+
+  testWidgets('the timeline opens on the first highlighted slot of the day '
+      'switched to', (WidgetTester tester) async {
+    final testDeps = buildTestDeps();
+    await testDeps.deps.eventTypes.upsert(_wednesdayAfternoon());
+    await _pumpBooking(tester, testDeps);
+
+    // Monday has no highlighted slot, so it opens on the 08:00 row.
+    expect(_timelineOffset(tester), 4 * RecurSizes.slotRow);
+
+    await tester.tap(find.text('Wed'));
+    await tester.pumpAndSettle();
+
+    // 16:00 is the twenty-first row: (960 - 360) / 30 = 20.
+    expect(_timelineOffset(tester), 20 * RecurSizes.slotRow);
+  });
+
+  testWidgets('a day whose first good slot is already on screen does not '
+      'move the timeline', (WidgetTester tester) async {
+    final testDeps = buildTestDeps();
+    await testDeps.deps.eventTypes.upsert(_ptSession());
+    await _pumpBooking(tester, testDeps);
+
+    final before = _timelineOffset(tester);
+
+    // Tuesday's first highlighted slot is 09:00, two rows below the 08:00
+    // row Monday opened on, so it is already in front of the user.
+    await tester.tap(find.text('Tue').first);
+    await tester.pumpAndSettle();
+
+    expect(_timelineOffset(tester), before);
+  });
+
+  testWidgets('selecting a slot keeps the timeline where it is', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    await testDeps.deps.eventTypes.upsert(_wednesdayAfternoon());
+    await _pumpBooking(tester, testDeps);
+
+    await tester.tap(find.text('Wed'));
+    await tester.pumpAndSettle();
+    final before = _timelineOffset(tester);
+
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) => widget is SlotTile && widget.timeLabel == '16:00',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_timelineOffset(tester), before);
+  });
+
+  testWidgets('a card that no longer exists pops the route', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+
+    await _pumpBookingPushed(tester, testDeps, eventTypeId: 'missing');
+
+    // Back on the page underneath, rather than stuck on a blank screen
+    // with no app bar to leave by.
+    expect(find.text('home'), findsOneWidget);
+    expect(find.byType(BookingScreen), findsNothing);
+  });
+
+  testWidgets('an unreadable card says so, with an app bar to leave by', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    await testDeps.store.write('event_types', 'not json');
+
+    await _pumpBookingPushed(tester, testDeps);
+
+    expect(find.text("Couldn't open this card."), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets('coming back after midnight moves today', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps(now: DateTime(2026, 9, 7, 23, 59));
+    await testDeps.deps.eventTypes.upsert(_ptSession());
+    await _pumpBooking(tester, testDeps);
+
+    DayPill pillFor(String label) => tester
+        .widgetList<DayPill>(find.byType(DayPill))
+        .firstWhere((p) => p.weekdayLabel == label);
+
+    expect(pillFor('Mon').isToday, isTrue);
+
+    testDeps.clock.advance(const Duration(minutes: 2));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(pillFor('Mon').isToday, isFalse);
+    expect(pillFor('Mon').enabled, isFalse);
+    expect(pillFor('Tue').isToday, isTrue);
   });
 
   group('goldens', () {

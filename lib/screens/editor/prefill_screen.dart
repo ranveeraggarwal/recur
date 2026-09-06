@@ -5,6 +5,7 @@ import '../../calendar/calendar_gateway.dart';
 import '../../core/local_date.dart';
 import '../../core/time_of_day_minutes.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/access_state.dart';
 import '../../widgets/day_pill.dart';
 import '../../widgets/week_header.dart';
 import 'event_prefill.dart';
@@ -46,7 +47,7 @@ class PrefillScreen extends StatefulWidget {
 class _PrefillScreenState extends State<PrefillScreen> {
   AppDependencies? _deps;
   bool _loading = true;
-  bool _hasAccess = false;
+  CalendarAccess _access = CalendarAccess.notDetermined;
   List<CalendarEvent> _events = const [];
 
   late LocalDate _today;
@@ -76,10 +77,10 @@ class _PrefillScreenState extends State<PrefillScreen> {
     _lastMonday = LocalDate.fromDateTime(to).mondayOfWeek;
 
     var events = const <CalendarEvent>[];
-    var hasAccess = false;
+    var access = CalendarAccess.notDetermined;
     try {
-      if (await deps.calendar.checkAccess() == CalendarAccess.granted) {
-        hasAccess = true;
+      access = await deps.calendar.checkAccess();
+      if (access == CalendarAccess.granted) {
         events = await deps.calendar.listEvents(from: from, to: to);
       }
     } catch (_) {
@@ -89,9 +90,15 @@ class _PrefillScreenState extends State<PrefillScreen> {
     if (!mounted) return;
     setState(() {
       _events = events.where(canPrefillFrom).toList();
-      _hasAccess = hasAccess;
+      _access = access;
       _loading = false;
     });
+  }
+
+  Future<void> _requestAccess() async {
+    await _deps!.calendar.requestAccess();
+    if (!mounted) return;
+    await _load();
   }
 
   List<CalendarEvent> _eventsOn(LocalDate date) {
@@ -120,8 +127,16 @@ class _PrefillScreenState extends State<PrefillScreen> {
       appBar: AppBar(title: const Text('Copy from calendar')),
       body: _loading
           ? const SizedBox.shrink()
-          : !_hasAccess
-          ? const _EmptyMessage('Recur needs calendar access to copy an event.')
+          : _access != CalendarAccess.granted
+          ? AccessState(
+              access: _access,
+              // Copying only reads the calendar, so having one to write
+              // to is not this screen's problem.
+              hasWritableCalendar: true,
+              onRequestAccess: _requestAccess,
+              onOpenSettings: () => _deps!.calendar.openSystemSettings(),
+              message: 'Recur needs calendar access to copy an event.',
+            )
           : _events.isEmpty
           ? const _EmptyMessage('Nothing in your calendar to copy.')
           : _body(),
