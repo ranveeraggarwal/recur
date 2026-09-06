@@ -243,6 +243,58 @@ void main() {
     });
   });
 
+  group('custom duration', () {
+    testWidgets(
+      "switching to a preset and back to Custom shows the preset's minutes",
+      (WidgetTester tester) async {
+        final testDeps = buildTestDeps();
+        await _pumpEditor(tester, testDeps);
+
+        await tester.tap(find.text('Custom'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).at(1), '75');
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('30 min'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Custom'));
+        await tester.pumpAndSettle();
+
+        final minutesField = tester.widget<TextField>(
+          find.byType(TextField).at(1),
+        );
+        expect(minutesField.controller!.text, '30');
+      },
+    );
+
+    testWidgets('typing in Minutes still works after a preset was chosen', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      await _pumpEditor(tester, testDeps);
+
+      await tester.enterText(find.byType(TextField).first, 'PT session');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Custom'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(1), '75');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('30 min'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Custom'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).at(1), '45');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ConfirmButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final saved = (await testDeps.deps.eventTypes.getAll()).single;
+      expect(saved.durationMinutes, 45);
+    });
+  });
+
   group('copy from calendar', () {
     void seedPhysio(TestDeps testDeps) {
       testDeps.calendar.events.add(

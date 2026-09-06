@@ -79,7 +79,17 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
-  void _onControllerChanged() => setState(() {});
+  /// Rebuilds on every draft change, then keeps [_customDurationController]
+  /// in sync with the draft's `customDurationText`. Setting `.text` is a
+  /// no-op while the user is typing (the draft is a mirror of what they
+  /// typed) and only fires when a duration pill rewrote the draft instead.
+  void _onControllerChanged() {
+    setState(() {});
+    final controller = _controller!;
+    if (_customDurationController.text != controller.customDurationText) {
+      _customDurationController.text = controller.customDurationText;
+    }
+  }
 
   @override
   void dispose() {
@@ -106,7 +116,6 @@ class _EditorScreenState extends State<EditorScreen> {
     _nameController.text = controller.name;
     _locationController.text = controller.location ?? '';
     _notesController.text = controller.notes ?? '';
-    _customDurationController.text = controller.customDurationText;
   }
 
   Future<void> _save() async {
