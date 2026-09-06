@@ -39,6 +39,25 @@ class SlotTile extends StatelessWidget {
 
   final VoidCallback? onTap;
 
+  /// What a screen reader reads for this row: the time, then what the row
+  /// is. A blocked row names its reason; a reason that is not one of the
+  /// fixed ones is an event's own name, so it reads as `busy: Dentist`.
+  String get _semanticsLabel {
+    final String? reason = reasonText;
+    return switch (appearance) {
+      SlotTileAppearance.available => '$timeLabel, available',
+      SlotTileAppearance.highlighted => '$timeLabel, suggested',
+      SlotTileAppearance.selected => '$timeLabel, selected',
+      SlotTileAppearance.doesNotFit => '$timeLabel, not enough room',
+      SlotTileAppearance.blocked => switch (reason) {
+        null || 'Busy' => '$timeLabel, busy',
+        'Past' => '$timeLabel, past',
+        'Outside hours' => '$timeLabel, outside hours',
+        _ => '$timeLabel, busy: $reason',
+      },
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool blocked = appearance == SlotTileAppearance.blocked;
@@ -107,9 +126,19 @@ class SlotTile extends StatelessWidget {
       child: interactive ? InkWell(onTap: onTap, child: stack) : stack,
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: SizedBox(height: RecurSizes.slotRow - 4, child: body),
+    // The label carries the time and the reason, so the inner Texts are
+    // excluded rather than read again after it.
+    return Semantics(
+      button: interactive,
+      enabled: interactive,
+      selected: selected,
+      label: _semanticsLabel,
+      excludeSemantics: true,
+      onTap: interactive ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: SizedBox(height: RecurSizes.slotRow - 4, child: body),
+      ),
     );
   }
 }

@@ -83,10 +83,14 @@ class Timeline extends StatelessWidget {
                       top: RecurSpacing.xs,
                       left: RecurSpacing.sm,
                     ),
-                    child: Text(
-                      formatMinutes(slot.startMinutes),
-                      style: RecurText.caption.copyWith(
-                        color: RecurColors.muted,
+                    // The tile's own label already reads the time, so the
+                    // gutter would otherwise read each hour twice.
+                    child: ExcludeSemantics(
+                      child: Text(
+                        formatMinutes(slot.startMinutes),
+                        style: RecurText.caption.copyWith(
+                          color: RecurColors.muted,
+                        ),
                       ),
                     ),
                   ),
