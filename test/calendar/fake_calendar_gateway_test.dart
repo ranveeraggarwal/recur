@@ -130,6 +130,17 @@ void main() {
       expect(gateway.openSystemSettingsCalls, 2);
     });
 
+    test(
+      'listWritableCalendars throws StateError unless access == granted',
+      () {
+        gateway.access = CalendarAccess.notDetermined;
+        expect(gateway.listWritableCalendars, throwsA(isA<StateError>()));
+
+        gateway.access = CalendarAccess.denied;
+        expect(gateway.listWritableCalendars, throwsA(isA<StateError>()));
+      },
+    );
+
     test('listWritableCalendars returns a copy of calendars', () async {
       final defaults = await gateway.listWritableCalendars();
       expect(defaults, [
