@@ -332,6 +332,48 @@ void main() {
     );
   });
 
+  testWidgets('the ask offers the button, and granting shows the week', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    testDeps.calendar.access = CalendarAccess.notDetermined;
+    testDeps.calendar.accessAfterRequest = CalendarAccess.granted;
+    testDeps.calendar.events.add(
+      _event(id: 'a', start: tuesday.add(const Duration(hours: 10))),
+    );
+
+    await _pumpAndOpen(tester, testDeps);
+
+    expect(find.text('Allow calendar access'), findsOneWidget);
+    expect(find.text('Week of 7 Sep'), findsNothing);
+
+    await tester.tap(find.text('Allow calendar access'));
+    await tester.pumpAndSettle();
+
+    expect(testDeps.calendar.requestAccessCalls, 1);
+    expect(find.text('Week of 7 Sep'), findsOneWidget);
+    await tester.tap(find.text('Tue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Physio'), findsOneWidget);
+  });
+
+  testWidgets('a denied calendar offers the way to settings', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    testDeps.calendar.access = CalendarAccess.denied;
+
+    await _pumpAndOpen(tester, testDeps);
+
+    expect(find.text('Allow calendar access'), findsNothing);
+    expect(find.text('Open settings'), findsOneWidget);
+
+    await tester.tap(find.text('Open settings'));
+    await tester.pumpAndSettle();
+
+    expect(testDeps.calendar.openSystemSettingsCalls, 1);
+  });
+
   testWidgets('two overlapping events share the width', (
     WidgetTester tester,
   ) async {

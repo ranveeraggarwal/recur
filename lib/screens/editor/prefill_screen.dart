@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
 import '../../calendar/calendar_gateway.dart';
+import '../../core/formatting.dart';
 import '../../core/local_date.dart';
 import '../../core/time_of_day_minutes.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/access_state.dart';
 import '../../widgets/day_pill.dart';
 import '../../widgets/week_header.dart';
 import 'event_prefill.dart';
@@ -14,16 +16,6 @@ import 'event_prefill.dart';
 /// week that was actually read.
 const Duration prefillLookBack = Duration(days: 90);
 const Duration prefillLookAhead = Duration(days: 30);
-
-const List<String> _weekdayLabels = [
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-  'Sun',
-];
 
 /// One hour of the timeline. Twice a Booking slot row, so an hour here is
 /// as tall as the two 30-minute rows it would be over there.
@@ -46,7 +38,7 @@ class PrefillScreen extends StatefulWidget {
 class _PrefillScreenState extends State<PrefillScreen> {
   AppDependencies? _deps;
   bool _loading = true;
-  bool _hasAccess = false;
+  CalendarAccess _access = CalendarAccess.notDetermined;
   List<CalendarEvent> _events = const [];
 
   late LocalDate _today;
@@ -76,10 +68,10 @@ class _PrefillScreenState extends State<PrefillScreen> {
     _lastMonday = LocalDate.fromDateTime(to).mondayOfWeek;
 
     var events = const <CalendarEvent>[];
-    var hasAccess = false;
+    var access = CalendarAccess.notDetermined;
     try {
-      if (await deps.calendar.checkAccess() == CalendarAccess.granted) {
-        hasAccess = true;
+      access = await deps.calendar.checkAccess();
+      if (access == CalendarAccess.granted) {
         events = await deps.calendar.listEvents(from: from, to: to);
       }
     } catch (_) {
@@ -89,9 +81,15 @@ class _PrefillScreenState extends State<PrefillScreen> {
     if (!mounted) return;
     setState(() {
       _events = events.where(canPrefillFrom).toList();
-      _hasAccess = hasAccess;
+      _access = access;
       _loading = false;
     });
+  }
+
+  Future<void> _requestAccess() async {
+    await _deps!.calendar.requestAccess();
+    if (!mounted) return;
+    await _load();
   }
 
   List<CalendarEvent> _eventsOn(LocalDate date) {
@@ -120,8 +118,16 @@ class _PrefillScreenState extends State<PrefillScreen> {
       appBar: AppBar(title: const Text('Copy from calendar')),
       body: _loading
           ? const SizedBox.shrink()
-          : !_hasAccess
-          ? const _EmptyMessage('Recur needs calendar access to copy an event.')
+          : _access != CalendarAccess.granted
+          ? AccessState(
+              access: _access,
+              // Copying only reads the calendar, so having one to write
+              // to is not this screen's problem.
+              hasWritableCalendar: true,
+              onRequestAccess: _requestAccess,
+              onOpenSettings: () => _deps!.calendar.openSystemSettings(),
+              message: 'Recur needs calendar access to copy an event.',
+            )
           : _events.isEmpty
           ? const _EmptyMessage('Nothing in your calendar to copy.')
           : _body(),
@@ -143,8 +149,10 @@ class _PrefillScreenState extends State<PrefillScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: RecurSpacing.lg),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [for (var i = 0; i < 7; i++) _pillFor(i)],
+            children: [
+              for (var i = 0; i < 7; i++)
+                Expanded(child: Center(child: _pillFor(i))),
+            ],
           ),
         ),
         const SizedBox(height: RecurSpacing.md),
@@ -165,7 +173,7 @@ class _PrefillScreenState extends State<PrefillScreen> {
   Widget _pillFor(int index) {
     final date = _weekMonday.addDays(index);
     return DayPill(
-      weekdayLabel: _weekdayLabels[index],
+      weekdayLabel: weekdayAbbrev[index],
       dayNumber: date.day,
       selected: date == _selectedDate,
       // Every day is pickable here: copying looks backwards, so a past

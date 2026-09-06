@@ -4,7 +4,8 @@ import 'local_store.dart';
 
 /// File-backed implementation of LocalStore using JSON files.
 /// One file per key under [root]/`<key>.json`.
-/// Writes go to `<key>.json.tmp` then rename, so a crash never leaves a half file.
+/// Writes go to `<key>.json.tmp`, flushed to disk, then renamed, so a crash
+/// never leaves a half file.
 class JsonFileLocalStore implements LocalStore {
   final Directory root;
 
@@ -45,9 +46,20 @@ class JsonFileLocalStore implements LocalStore {
       await root.create(recursive: true);
     }
 
-    // Write to temporary file
+    // Delete a stale temp file left behind by a previous crash, if any.
+    // Not required for correctness (rename overwrites it anyway on
+    // Linux/Android), but avoids relying on that.
     final tmpFile = _tmpFileForKey(key);
-    await tmpFile.writeAsString(json);
+    if (await tmpFile.exists()) {
+      await tmpFile.delete();
+    }
+
+    // Write to temporary file, flushing to disk before returning so the
+    // rename below can never make an unflushed (half-written or empty)
+    // file durable. Without flush: true, writeAsString may return once the
+    // bytes are only in the OS buffer, so a crash between the write and the
+    // rename could leave the renamed file empty or truncated.
+    await tmpFile.writeAsString(json, flush: true);
 
     // Rename temporary file to actual file (atomic)
     final file = _fileForKey(key);

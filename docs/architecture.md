@@ -5,8 +5,9 @@ A small app deserves a small architecture. Here is the whole thing.
 ## The tools
 
 Flutter 3.47.2 (Dart 3.13.2), Android only, minSdk 24, targetSdk 35. One
-plugin for the calendar, `device_calendar_plus` 0.8.0, and `path_provider`
-for a folder to save files in. That is the full dependency list.
+plugin for the calendar, `device_calendar_plus` 0.8.0, `path_provider` for a
+folder to save files in, and `http` for the address lookup's calls to
+Nominatim. That is the full dependency list.
 
 Before you push anything:
 
@@ -24,13 +25,14 @@ lib/
   core/          dates, clocks, ids, and the little text formatters
   data/          the three models and where they are saved
   calendar/      the gateway to the phone calendar, a fake, and the real one
+  places/        the gateway to Nominatim, a fake, and the real one
   suggestions/   the slot logic
   theme/         every colour, size, and font, in one file
   widgets/       cards, pills, tiles, buttons
   screens/       home, editor, booking
 ```
 
-Three ideas hold it together.
+Four ideas hold it together.
 
 **One door to the calendar.** Everything that touches the phone calendar
 goes through a small interface called `CalendarGateway`. It can check and
@@ -40,6 +42,17 @@ ids still exist, and create one event. It still never updates or deletes
 anything. There is a fake version that lives in memory, and every screen
 and every test uses the fake. Only one file in the whole app,
 `device_calendar_gateway.dart`, knows the plugin exists.
+
+**Places gateway.** The Location field's address suggestions go through the
+same one-door rule, behind a small interface called `PlacesGateway`. Only
+`lib/places/nominatim_places_gateway.dart` knows that Nominatim exists;
+every screen and every test uses `FakePlacesGateway`. Nominatim is free and
+needs no key, but its usage policy asks for a descriptive `User-Agent` and
+at most one request a second, so the gateway itself sends a real
+`User-Agent` naming the app and waits out any remainder of that second
+before it sends the next request, rather than counting on the field's
+typing debounce to keep the pace down. A failed lookup just returns no
+suggestions; the field still works as a plain text field.
 
 **Wall-clock time, always.** An appointment is "Tuesday at ten", not an
 instant on a global timeline. So Recur stores and shows local times, and it
@@ -115,9 +128,13 @@ with an `InheritedWidget` called `AppScope`. Screens navigate with plain
 `ChangeNotifier`). No state-management library, no router library.
 
 When you confirm, the Booking controller writes the calendar event first
-and logs the booking second. If the write fails, nothing is logged and you
-see `Couldn't add to calendar.` The calendar it writes to is the one you
-chose, or the only writable one, or it asks.
+and logs the booking second. If the calendar write itself fails, nothing is
+written or logged and you see `Couldn't add to calendar.` If the calendar
+write succeeds but logging the booking fails, the event is already in your
+calendar and you see `Added to your calendar, but Recur couldn't save the
+booking.`; Booking closes anyway, since Recur's own record really is
+missing and Confirm should not be tried again. The calendar it writes to is
+the one you chose, or the only writable one, or it asks.
 
 Run the app against the fake calendar with
 `flutter run --dart-define=USE_FAKE_CALENDAR=true`.
@@ -146,6 +163,7 @@ completes, so loading them in the test body hangs until it times out.
 | Blocked kinds | An overlap is a `conflict` when an event covers the row's own 30 minutes (and the row names it), else `doesNotFit` (`Not enough room`, on the plain surface, still not tappable). |
 | Conflicts | Every calendar. All-day and free events never block. Half-open overlap. |
 | Plugin use | Create events only. Never update or delete. |
+| Places lookup | Nominatim: free, needs no API key, unlike Google Places or Mapbox. A convenience only - the Location field still works as plain text, and a failed or rate-limited lookup never blocks it. |
 | Calendar choice | Stored id if still writable, else the only writable one, else ask. |
 | Deleting a card | Removes its bookings in Recur. The calendar is untouched. |
 | Deleting an event in the calendar | Its booking is dropped from Recur on the next Home or Booking load. Five most recent per card are checked. A calendar that cannot be read prunes nothing. |

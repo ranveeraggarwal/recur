@@ -4,6 +4,8 @@
 /// deleted. See `docs/architecture.md`, section "The data".
 library;
 
+import 'json_helpers.dart';
+
 final class Booking {
   const Booking({
     required this.id,
@@ -46,13 +48,15 @@ final class Booking {
 
   factory Booking.fromJson(Map<String, dynamic> json) {
     return Booking(
-      id: _require<String>(json, 'id', 'Booking'),
-      eventTypeId: _require<String>(json, 'eventTypeId', 'Booking'),
-      start: DateTime.parse(_require<String>(json, 'start', 'Booking')),
-      end: DateTime.parse(_require<String>(json, 'end', 'Booking')),
-      calendarId: _require<String>(json, 'calendarId', 'Booking'),
-      calendarEventId: _require<String>(json, 'calendarEventId', 'Booking'),
-      createdAt: DateTime.parse(_require<String>(json, 'createdAt', 'Booking')),
+      id: requireJson<String>(json, 'id', 'Booking'),
+      eventTypeId: requireJson<String>(json, 'eventTypeId', 'Booking'),
+      start: DateTime.parse(requireJson<String>(json, 'start', 'Booking')),
+      end: DateTime.parse(requireJson<String>(json, 'end', 'Booking')),
+      calendarId: requireJson<String>(json, 'calendarId', 'Booking'),
+      calendarEventId: requireJson<String>(json, 'calendarEventId', 'Booking'),
+      createdAt: DateTime.parse(
+        requireJson<String>(json, 'createdAt', 'Booking'),
+      ),
     );
   }
 
@@ -81,18 +85,4 @@ final class Booking {
   @override
   String toString() =>
       'Booking(id: $id, eventTypeId: $eventTypeId, start: $start, end: $end)';
-}
-
-/// Reads [key] from [json] as a [T], throwing a [FormatException] (naming
-/// [typeName] and [key]) when the key is missing, null, or the wrong type —
-/// never a raw cast error.
-T _require<T>(Map<String, dynamic> json, String key, String typeName) {
-  if (!json.containsKey(key) || json[key] == null) {
-    throw FormatException('Missing required key "$key" in $typeName JSON.');
-  }
-  final value = json[key];
-  if (value is! T) {
-    throw FormatException('Key "$key" in $typeName JSON has the wrong type.');
-  }
-  return value;
 }

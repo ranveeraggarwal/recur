@@ -66,6 +66,23 @@ void main() {
       expect(exists, false);
     });
 
+    test('writing the same key twice leaves exactly one file with the second '
+        'content', () async {
+      final store = JsonFileLocalStore(tempDir);
+      const json1 = '{"name":"test1"}';
+      const json2 = '{"name":"test2"}';
+      await store.write('event_types', json1);
+      await store.write('event_types', json2);
+
+      final entries = tempDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.contains('event_types'))
+          .toList();
+      expect(entries, hasLength(1));
+      expect(await store.read('event_types'), json2);
+    });
+
     test(
       'a second store on the same directory reads what the first wrote',
       () async {

@@ -5,6 +5,23 @@ import '../../suggestions/slot_grid.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/slot_tile.dart';
 
+/// The scroll offset a day's timeline should open at: the first
+/// highlighted slot, else the 08:00 row, else the top.
+///
+/// Pure, so the rule is unit-tested without a widget. Every row is
+/// [RecurSizes.slotRow] tall, and [Timeline] gives its list that
+/// `itemExtent`, so an index maps straight to an offset.
+double initialTimelineOffset(List<Slot> slots) {
+  final highlightedIndex = slots.indexWhere(
+    (s) => s.state == SlotState.highlighted,
+  );
+  final eightAmIndex = slots.indexWhere((s) => s.startMinutes == 480);
+  final index = highlightedIndex >= 0
+      ? highlightedIndex
+      : (eightAmIndex >= 0 ? eightAmIndex : 0);
+  return index * RecurSizes.slotRow;
+}
+
 /// The vertical 06:00-22:00 list of 30-minute [SlotTile] rows for one day.
 ///
 /// Takes plain values only, so it does not depend on the controller.
@@ -26,6 +43,10 @@ class Timeline extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.builder(
       controller: scrollController,
+      // Every row is exactly this tall, so telling the list up front makes
+      // the scroll extent known on the first frame (a jump to another
+      // day's offset can be clamped correctly) and cheaper to lay out.
+      itemExtent: RecurSizes.slotRow,
       itemCount: slots.length,
       itemBuilder: (context, index) => _row(slots[index]),
     );
@@ -83,10 +104,14 @@ class Timeline extends StatelessWidget {
                       top: RecurSpacing.xs,
                       left: RecurSpacing.sm,
                     ),
-                    child: Text(
-                      formatMinutes(slot.startMinutes),
-                      style: RecurText.caption.copyWith(
-                        color: RecurColors.muted,
+                    // The tile's own label already reads the time, so the
+                    // gutter would otherwise read each hour twice.
+                    child: ExcludeSemantics(
+                      child: Text(
+                        formatMinutes(slot.startMinutes),
+                        style: RecurText.caption.copyWith(
+                          color: RecurColors.muted,
+                        ),
                       ),
                     ),
                   ),

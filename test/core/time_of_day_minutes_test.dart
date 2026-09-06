@@ -24,4 +24,24 @@ void main() {
       expect(minutesOfDay(DateTime(2026, 1, 1, 10, 30)), 630);
     });
   });
+
+  group('roundDownToSlot', () {
+    test('rounds down to the slot mark below', () {
+      expect(roundDownToSlot(605), 600);
+    });
+
+    test('leaves a value already on a mark alone', () {
+      expect(roundDownToSlot(630), 630);
+    });
+  });
+
+  group('roundUpToSlot', () {
+    test('rounds up to the slot mark above', () {
+      expect(roundUpToSlot(605), 630);
+    });
+
+    test('leaves a value already on a mark alone', () {
+      expect(roundUpToSlot(630), 630);
+    });
+  });
 }

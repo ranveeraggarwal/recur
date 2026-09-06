@@ -46,6 +46,48 @@ void main() {
       ]);
     });
 
+    test('the request carries a real, identifying User-Agent', () async {
+      String? userAgent;
+      final gateway = NominatimPlacesGateway(
+        client: MockClient((request) async {
+          userAgent = request.headers['User-Agent'];
+          return http.Response('[]', 200);
+        }),
+      );
+
+      await gateway.search('Kungsholmen');
+
+      expect(userAgent, isNotNull);
+      expect(userAgent, contains('github.com/ranveeraggarwal/recur'));
+      expect(userAgent, isNot(contains('contact none')));
+    });
+
+    test('a second search waits out the remainder of one second since the '
+        'first', () async {
+      final waited = <Duration>[];
+      final gateway = NominatimPlacesGateway(
+        client: MockClient((request) async => http.Response('[]', 200)),
+        wait: (duration) {
+          waited.add(duration);
+          return Future.value();
+        },
+      );
+
+      await gateway.search('Kungsholmen');
+      expect(waited, isEmpty);
+
+      await gateway.search('Kungsholmstorg');
+
+      expect(waited, hasLength(1));
+      // The two calls above run back to back with no real delay between
+      // them, so the wait should be close to the full second, not zero.
+      expect(waited.single.inMilliseconds, greaterThan(500));
+      expect(
+        waited.single.inMilliseconds,
+        lessThanOrEqualTo(const Duration(seconds: 1).inMilliseconds),
+      );
+    });
+
     test('a non-200 response returns no suggestions', () async {
       final gateway = NominatimPlacesGateway(
         client: MockClient((request) async => http.Response('', 503)),

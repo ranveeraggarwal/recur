@@ -12,16 +12,6 @@ import 'editor_controller.dart';
 import 'event_prefill.dart';
 import 'prefill_screen.dart';
 
-const List<String> _weekdayLabels = [
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-  'Sun',
-];
-
 /// A form for creating or editing one event type.
 ///
 /// Pass `eventTypeId: null` for a new card, or an existing id to edit it.
@@ -72,6 +62,11 @@ class _EditorScreenState extends State<EditorScreen> {
     _controller = controller;
     controller.load().then((_) {
       if (!mounted) return;
+      if (controller.notFound) {
+        Navigator.of(context).pop();
+        return;
+      }
+      if (controller.loadError) return;
       _nameController.text = controller.name;
       _locationController.text = controller.location ?? '';
       _notesController.text = controller.notes ?? '';
@@ -79,7 +74,17 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
-  void _onControllerChanged() => setState(() {});
+  /// Rebuilds on every draft change, then keeps [_customDurationController]
+  /// in sync with the draft's `customDurationText`. Setting `.text` is a
+  /// no-op while the user is typing (the draft is a mirror of what they
+  /// typed) and only fires when a duration pill rewrote the draft instead.
+  void _onControllerChanged() {
+    setState(() {});
+    final controller = _controller!;
+    if (_customDurationController.text != controller.customDurationText) {
+      _customDurationController.text = controller.customDurationText;
+    }
+  }
 
   @override
   void dispose() {
@@ -106,12 +111,18 @@ class _EditorScreenState extends State<EditorScreen> {
     _nameController.text = controller.name;
     _locationController.text = controller.location ?? '';
     _notesController.text = controller.notes ?? '';
-    _customDurationController.text = controller.customDurationText;
   }
 
   Future<void> _save() async {
     final controller = _controller!;
-    await controller.save();
+    try {
+      await controller.save();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Couldn't save.")));
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }
@@ -121,7 +132,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete "${controller.name}"?'),
+        title: Text('Delete "${controller.savedName ?? controller.name}"?'),
         content: const Text(
           'Past bookings are removed from Recur. '
           'Calendar events are not touched.',
@@ -140,7 +151,14 @@ class _EditorScreenState extends State<EditorScreen> {
     );
 
     if (confirmed == true) {
-      await controller.delete();
+      try {
+        await controller.delete();
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Couldn't delete.")));
+        return;
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     }
@@ -151,6 +169,15 @@ class _EditorScreenState extends State<EditorScreen> {
     final controller = _controller;
     if (controller == null || controller.loading) {
       return const Scaffold(body: SizedBox.shrink());
+    }
+
+    if (controller.loadError) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(
+          child: Text("Couldn't open this card.", style: RecurText.body),
+        ),
+      );
     }
 
     return Scaffold(
@@ -306,7 +333,7 @@ class _WeekdayGroup extends StatelessWidget {
             for (var i = 0; i < 7; i++)
               IntrinsicWidth(
                 child: DurationPill(
-                  label: _weekdayLabels[i],
+                  label: weekdayAbbrev[i],
                   selected: controller.weekdays.contains(i + 1),
                   onTap: () => controller.toggleWeekday(i + 1),
                 ),

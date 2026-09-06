@@ -2,8 +2,11 @@
 /// and the weekdays and times of day they usually want it at.
 library;
 
+import 'package:flutter/foundation.dart';
+
 import '../../core/time_of_day_minutes.dart';
 import '../../core/time_window.dart';
+import 'json_helpers.dart';
 
 /// Sentinel used by [EventType.copyWith] to tell "leave [location]/[notes]
 /// unset" apart from "set it to null".
@@ -181,21 +184,35 @@ final class EventType {
   }
 
   factory EventType.fromJson(Map<String, dynamic> json) {
-    final weekdaysRaw = _require<List<dynamic>>(
+    final weekdaysRaw = requireJson<List<dynamic>>(
       json,
       'preferredWeekdays',
       'EventType',
     );
+    final preferredWeekdays = <int>{};
+    for (final entry in weekdaysRaw) {
+      if (entry is! int || entry < 1 || entry > 7) {
+        throw const FormatException(
+          'Key "preferredWeekdays" in EventType JSON has the wrong type.',
+        );
+      }
+      preferredWeekdays.add(entry);
+    }
+    if (preferredWeekdays.isEmpty) {
+      throw const FormatException(
+        'Key "preferredWeekdays" in EventType JSON has the wrong type.',
+      );
+    }
     return EventType(
-      id: _require<String>(json, 'id', 'EventType'),
-      name: _require<String>(json, 'name', 'EventType'),
-      durationMinutes: _require<int>(json, 'durationMinutes', 'EventType'),
-      location: json['location'] as String?,
-      notes: json['notes'] as String?,
-      preferredWeekdays: weekdaysRaw.map((e) => e as int).toSet(),
+      id: requireJson<String>(json, 'id', 'EventType'),
+      name: requireJson<String>(json, 'name', 'EventType'),
+      durationMinutes: requireJson<int>(json, 'durationMinutes', 'EventType'),
+      location: _normalise(json['location'] as String?),
+      notes: _normalise(json['notes'] as String?),
+      preferredWeekdays: preferredWeekdays,
       preferredWindows: _windowsFrom(json),
       createdAt: DateTime.parse(
-        _require<String>(json, 'createdAt', 'EventType'),
+        requireJson<String>(json, 'createdAt', 'EventType'),
       ),
     );
   }
@@ -208,7 +225,7 @@ final class EventType {
       other.durationMinutes == durationMinutes &&
       other.location == location &&
       other.notes == notes &&
-      _setEquals(other.preferredWeekdays, preferredWeekdays) &&
+      setEquals(other.preferredWeekdays, preferredWeekdays) &&
       timeWindowListEquals(other.preferredWindows, preferredWindows) &&
       other.createdAt == createdAt;
 
@@ -247,30 +264,21 @@ List<TimeWindow> _windowsFrom(Map<String, dynamic> json) {
   }
   return [
     TimeWindow(
-      startMinutes: _require<int>(json, 'preferredStartMinutes', 'EventType'),
-      endMinutes: _require<int>(json, 'preferredEndMinutes', 'EventType'),
+      startMinutes: requireJson<int>(
+        json,
+        'preferredStartMinutes',
+        'EventType',
+      ),
+      endMinutes: requireJson<int>(json, 'preferredEndMinutes', 'EventType'),
     ),
   ];
 }
 
-bool _setEquals(Set<int> a, Set<int> b) {
-  if (a.length != b.length) return false;
-  for (final value in a) {
-    if (!b.contains(value)) return false;
-  }
-  return true;
-}
-
-/// Reads [key] from [json] as a [T], throwing a [FormatException] (naming
-/// [typeName] and [key]) when the key is missing, null, or the wrong type —
-/// never a raw cast error.
-T _require<T>(Map<String, dynamic> json, String key, String typeName) {
-  if (!json.containsKey(key) || json[key] == null) {
-    throw FormatException('Missing required key "$key" in $typeName JSON.');
-  }
-  final value = json[key];
-  if (value is! T) {
-    throw FormatException('Key "$key" in $typeName JSON has the wrong type.');
-  }
-  return value;
+/// Trims [value] and treats an empty result as `null`, so a hand-edited or
+/// older file's `""` normalises instead of tripping the constructor's
+/// non-empty assert.
+String? _normalise(String? value) {
+  if (value == null) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }

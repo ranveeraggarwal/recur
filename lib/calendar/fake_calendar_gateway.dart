@@ -114,6 +114,13 @@ class FakeCalendarGateway implements CalendarGateway {
 
   @override
   Future<List<CalendarInfo>> listWritableCalendars() async {
+    // The real plugin throws a DeviceCalendarException without READ_CALENDAR,
+    // so the fake has to as well or a screen that forgets to check access
+    // passes every test and goes blank on a phone.
+    if (access != CalendarAccess.granted) {
+      throw StateError('listWritableCalendars requires access == granted.');
+    }
+
     return List.of(calendars);
   }
 

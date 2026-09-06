@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/core/local_date.dart';
 import 'package:recur/screens/booking/timeline.dart';
 import 'package:recur/suggestions/slot_grid.dart';
+import 'package:recur/theme/tokens.dart';
 import 'package:recur/widgets/slot_tile.dart';
 
 Slot _slot(
@@ -23,6 +24,54 @@ Slot _slot(
 }
 
 void main() {
+  group('initialTimelineOffset', () {
+    test('opens on the day\'s first highlighted slot', () {
+      final slots = [
+        for (var m = 360; m < 1320; m += 30)
+          _slot(
+            m,
+            state: m == 600 || m == 630
+                ? SlotState.highlighted
+                : SlotState.available,
+          ),
+      ];
+
+      // 10:00 is the ninth row: (600 - 360) / 30 = 8.
+      expect(initialTimelineOffset(slots), 8 * RecurSizes.slotRow);
+    });
+
+    test('falls back to the 08:00 row when nothing is highlighted', () {
+      final slots = [for (var m = 360; m < 1320; m += 30) _slot(m)];
+
+      expect(initialTimelineOffset(slots), 4 * RecurSizes.slotRow);
+    });
+
+    test('falls back to the top when there is no 08:00 row', () {
+      final slots = [_slot(540), _slot(570)];
+
+      expect(initialTimelineOffset(slots), 0);
+    });
+
+    test('an empty day opens at the top', () {
+      expect(initialTimelineOffset(const []), 0);
+    });
+  });
+
+  testWidgets('every row is exactly one slot row tall', (tester) async {
+    final slots = [for (var m = 360; m < 1320; m += 30) _slot(m)];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Timeline(slots: slots, selectedSlot: null, onToggle: (_) {}),
+        ),
+      ),
+    );
+
+    final list = tester.widget<ListView>(find.byType(ListView));
+    expect(list.itemExtent, RecurSizes.slotRow);
+  });
+
   testWidgets('a 60-minute selection highlights both rows it spans', (
     tester,
   ) async {
@@ -121,6 +170,36 @@ void main() {
       expect(tileFor(label).appearance, SlotTileAppearance.blocked);
       expect(tileFor(label).reasonText, 'Jazz Dance Book Discussion');
     }
+  });
+
+  testWidgets('the hour gutter is not read on top of the tile', (tester) async {
+    final handle = tester.ensureSemantics();
+    final slots = [
+      _slot(540),
+      _slot(570),
+      _slot(
+        600,
+        state: SlotState.blocked,
+        blockReason: BlockReason.conflict,
+        blockingTitle: 'Dentist',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Timeline(slots: slots, selectedSlot: null, onToggle: (_) {}),
+        ),
+      ),
+    );
+
+    // 09:00 and 10:00 are hour marks, so the gutter draws their time as
+    // well. Only the tile's own label should carry it.
+    expect(find.bySemanticsLabel('09:00'), findsNothing);
+    expect(find.bySemanticsLabel('10:00'), findsNothing);
+    expect(find.bySemanticsLabel('09:00, available'), findsOneWidget);
+    expect(find.bySemanticsLabel('10:00, busy: Dentist'), findsOneWidget);
+    handle.dispose();
   });
 
   testWidgets('a slot that does not fit cannot be tapped', (tester) async {
