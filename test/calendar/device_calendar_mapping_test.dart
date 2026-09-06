@@ -7,9 +7,11 @@ Event _event({
   required String title,
   bool isAllDay = false,
   EventAvailability availability = EventAvailability.busy,
+  DateTime? startDate,
+  DateTime? endDate,
 }) {
-  final start = DateTime(2024, 1, 10, 9);
-  final end = DateTime(2024, 1, 10, 10);
+  final start = startDate ?? DateTime(2024, 1, 10, 9);
+  final end = endDate ?? DateTime(2024, 1, 10, 10);
   return Event(
     eventId: 'e1',
     instanceId: 'e1',
@@ -153,6 +155,29 @@ void main() {
           _event(title: 'Maybe', availability: EventAvailability.tentative),
         ),
         isTrue,
+      );
+    });
+
+    test('a zero-length event does not block', () {
+      final start = DateTime(2024, 1, 10, 9);
+      expect(
+        isBlockingEvent(
+          _event(title: 'Zero-length', startDate: start, endDate: start),
+        ),
+        isFalse,
+      );
+    });
+
+    test('an event ending before it starts does not block', () {
+      expect(
+        isBlockingEvent(
+          _event(
+            title: 'Backwards',
+            startDate: DateTime(2024, 1, 10, 9),
+            endDate: DateTime(2024, 1, 10, 8),
+          ),
+        ),
+        isFalse,
       );
     });
   });
