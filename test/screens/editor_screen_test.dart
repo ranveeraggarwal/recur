@@ -250,8 +250,9 @@ void main() {
           id: 'evt-9',
           calendarId: 'cal-1',
           title: 'Physio',
-          start: DateTime(2026, 9, 1, 10),
-          end: DateTime(2026, 9, 1, 10, 45),
+          // Tuesday of the week the picker opens on.
+          start: DateTime(2026, 9, 8, 10),
+          end: DateTime(2026, 9, 8, 10, 45),
           isAllDay: false,
           location: 'Vasastan',
           notes: 'Bring the referral',
@@ -278,7 +279,7 @@ void main() {
       expect(find.text('Copy from calendar'), findsNothing);
     });
 
-    testWidgets('picking an event fills the form in', (
+    testWidgets('picking an event off the calendar fills the form in', (
       WidgetTester tester,
     ) async {
       final testDeps = buildTestDeps();
@@ -288,7 +289,10 @@ void main() {
       await tester.tap(find.text('Copy from calendar'));
       await tester.pumpAndSettle();
 
-      expect(find.text('45 min · Tue 1 Sep · Vasastan'), findsOneWidget);
+      // The week view, not a list of names.
+      expect(find.text('Week of 7 Sep'), findsOneWidget);
+      await tester.tap(find.text('Tue'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Physio'));
       await tester.pumpAndSettle();
 
@@ -312,6 +316,24 @@ void main() {
       ]);
     });
 
+    testWidgets('backing out of the picker leaves the draft alone', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      seedPhysio(testDeps);
+      await _pumpEditor(tester, testDeps);
+
+      await tester.enterText(find.byType(TextField).first, 'PT session');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copy from calendar'));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      final nameField = tester.widget<TextField>(find.byType(TextField).first);
+      expect(nameField.controller!.text, 'PT session');
+    });
+
     testWidgets('an empty calendar says so', (WidgetTester tester) async {
       final testDeps = buildTestDeps();
       await _pumpEditor(tester, testDeps);
@@ -322,7 +344,7 @@ void main() {
       expect(find.text('Nothing in your calendar to copy.'), findsOneWidget);
     });
 
-    testWidgets('without calendar access it says so too', (
+    testWidgets('without calendar access it asks for it', (
       WidgetTester tester,
     ) async {
       final testDeps = buildTestDeps();
@@ -333,7 +355,10 @@ void main() {
       await tester.tap(find.text('Copy from calendar'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Nothing in your calendar to copy.'), findsOneWidget);
+      expect(
+        find.text('Recur needs calendar access to copy an event.'),
+        findsOneWidget,
+      );
     });
   });
 

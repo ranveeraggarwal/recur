@@ -9,6 +9,7 @@ import '../../data/models/event_type.dart';
 import '../../suggestions/slot_grid.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/confirm_button.dart';
+import '../../widgets/week_header.dart';
 import 'booking_controller.dart';
 import 'calendar_picker_sheet.dart';
 import 'confirmation_sheet.dart';
@@ -185,36 +186,12 @@ class _BookingBody extends StatelessWidget {
 
     return Column(
       children: [
-        SizedBox(
-          height: 72,
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                tooltip: 'Previous week',
-                onPressed: backDisabled
-                    ? null
-                    : () => controller.showWeek(
-                        controller.weekMonday.addDays(-7),
-                      ),
-              ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    formatWeekOf(controller.weekMonday),
-                    style: RecurText.label,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                tooltip: 'Next week',
-                onPressed: () =>
-                    controller.showWeek(controller.weekMonday.addDays(7)),
-              ),
-            ],
-          ),
+        WeekHeader(
+          weekMonday: controller.weekMonday,
+          onPrevious: backDisabled
+              ? null
+              : () => controller.showWeek(controller.weekMonday.addDays(-7)),
+          onNext: () => controller.showWeek(controller.weekMonday.addDays(7)),
         ),
         DayStrip(
           weekMonday: controller.weekMonday,

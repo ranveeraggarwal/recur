@@ -192,7 +192,7 @@ void main() {
           notes: 'Bring the referral',
           weekdays: const {2, 4},
           windows: const [TimeWindow(startMinutes: 600, endMinutes: 720)],
-          latestStart: DateTime(2026, 9, 8, 10),
+          sourceStart: DateTime(2026, 9, 8, 10),
           occurrences: 3,
         ),
       );
@@ -220,7 +220,7 @@ void main() {
           durationMinutes: 50,
           weekdays: const {2},
           windows: const [TimeWindow(startMinutes: 600, endMinutes: 720)],
-          latestStart: DateTime(2026, 9, 8, 10),
+          sourceStart: DateTime(2026, 9, 8, 10),
           occurrences: 1,
         ),
       );

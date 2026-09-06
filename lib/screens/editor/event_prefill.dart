@@ -1,17 +1,14 @@
-/// Turns events already in the phone calendar into draft cards, so a new
-/// card can be filled in from something the user has booked before rather
-/// than typed out again.
+/// Turns an event already in the phone calendar into a draft card, so a
+/// new card can be filled in from something the user has booked before
+/// rather than typed out again.
 library;
 
 import '../../calendar/calendar_gateway.dart';
 import '../../core/time_of_day_minutes.dart';
 import '../../core/time_window.dart';
 
-/// The most cards the picker offers, newest first. A long calendar would
-/// otherwise fill the sheet with everything the user has ever done.
-const int maxPrefills = 30;
-
-/// A card's fields, read off one title's occurrences in the calendar.
+/// A card's fields, read off one event in the calendar and the other
+/// occurrences that share its name.
 ///
 /// Every field is already inside the Editor's limits: the name is trimmed
 /// to 40 characters, the duration is a multiple of 5 between 5 and 480,
@@ -25,25 +22,32 @@ final class EventPrefill {
     this.notes,
     required this.weekdays,
     required this.windows,
-    required this.latestStart,
+    required this.sourceStart,
     required this.occurrences,
   });
 
   final String name;
   final int durationMinutes;
+
+  /// Where the event is. Taken from the tapped occurrence, or from the
+  /// most recent one that has a location when the tapped one has none.
   final String? location;
+
+  /// The event's description, under the same rule as [location].
   final String? notes;
 
-  /// The weekdays the event has actually fallen on, 1 = Monday.
+  /// The weekdays this event has actually fallen on, 1 = Monday.
   final Set<int> weekdays;
 
-  /// One window, spanning the earliest start to the latest end seen.
+  /// One window, spanning the earliest start to the latest end seen
+  /// across every occurrence.
   final List<TimeWindow> windows;
 
-  /// The start of the most recent occurrence, for the picker's caption.
-  final DateTime latestStart;
+  /// The start of the occurrence this was copied from.
+  final DateTime sourceStart;
 
-  /// How many occurrences this was read from.
+  /// How many occurrences of this name the weekdays and window were read
+  /// from, the tapped one included.
   final int occurrences;
 
   @override
@@ -52,56 +56,82 @@ final class EventPrefill {
       'occurrences: $occurrences)';
 }
 
-/// Groups [events] by title and turns each group into an [EventPrefill],
-/// most recently seen first.
-///
-/// Events that could not be a card are dropped: all-day ones, untitled
-/// ones, and anything shorter than 5 or longer than 480 minutes.
-List<EventPrefill> prefillsFromEvents(List<CalendarEvent> events) {
-  final byTitle = <String, List<CalendarEvent>>{};
-  for (final event in events) {
-    final title = event.title.trim();
-    if (title.isEmpty || event.isAllDay) continue;
-    final minutes = event.durationMinutes;
-    if (minutes < 5 || minutes > 480) continue;
-    byTitle.putIfAbsent(title, () => []).add(event);
-  }
-
-  final prefills = <EventPrefill>[];
-  for (final entry in byTitle.entries) {
-    final occurrences = entry.value..sort((a, b) => a.start.compareTo(b.start));
-    prefills.add(_prefillFor(entry.key, occurrences));
-  }
-
-  prefills.sort((a, b) => b.latestStart.compareTo(a.latestStart));
-  return prefills.take(maxPrefills).toList();
+/// Whether [event] could become a card at all. All-day events, untitled
+/// ones, and anything shorter than 5 or longer than 480 minutes cannot:
+/// the Editor has no way to hold them.
+bool canPrefillFrom(CalendarEvent event) {
+  if (event.isAllDay) return false;
+  if (event.title.trim().isEmpty) return false;
+  final minutes = event.durationMinutes;
+  return minutes >= 5 && minutes <= 480;
 }
 
-EventPrefill _prefillFor(String title, List<CalendarEvent> occurrences) {
-  final latest = occurrences.last;
-  final duration = _roundToFive(latest.durationMinutes);
+/// Builds the card [event] would become.
+///
+/// The tapped occurrence supplies the details — name, how long it takes,
+/// where it is, its notes. Every other occurrence of the same name in
+/// [allEvents] supplies the pattern: which weekdays it falls on and the
+/// span of the day it runs in. A detail the tapped occurrence is missing
+/// is taken from the most recent occurrence that has one, so a series
+/// whose latest instance dropped its location still copies it.
+///
+/// Returns `null` when [event] could not be a card; see [canPrefillFrom].
+EventPrefill? prefillFor({
+  required CalendarEvent event,
+  required List<CalendarEvent> allEvents,
+}) {
+  if (!canPrefillFrom(event)) return null;
+
+  final title = event.title.trim();
+  final occurrences =
+      allEvents
+          .where((e) => canPrefillFrom(e) && e.title.trim() == title)
+          .toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
+  if (occurrences.isEmpty) occurrences.add(event);
 
   var earliest = dayEndMinutes;
   var latestEnd = dayStartMinutes;
   final weekdays = <int>{};
-  for (final event in occurrences) {
-    weekdays.add(event.start.weekday);
-    final start = _roundDown(minutesOfDay(event.start));
-    final end = _roundUp(_endMinutesOf(event));
+  for (final occurrence in occurrences) {
+    weekdays.add(occurrence.start.weekday);
+    final start = _roundDown(minutesOfDay(occurrence.start));
+    final end = _roundUp(_endMinutesOf(occurrence));
     if (start < earliest) earliest = start;
     if (end > latestEnd) latestEnd = end;
   }
 
+  final duration = _roundToFive(event.durationMinutes);
+
   return EventPrefill(
     name: _clip(title, 40)!,
     durationMinutes: duration,
-    location: _clip(latest.location, 80),
-    notes: _clip(latest.notes, 500),
+    location: _detail(event.location, occurrences, (e) => e.location, 80),
+    notes: _detail(event.notes, occurrences, (e) => e.notes, 500),
     weekdays: weekdays,
     windows: [_windowFor(earliest, latestEnd, duration)],
-    latestStart: latest.start,
+    sourceStart: event.start,
     occurrences: occurrences.length,
   );
+}
+
+/// [preferred] when the tapped occurrence has it, else the same field off
+/// the most recent [occurrences] that does, else `null`. Android stores a
+/// missing location as an empty string rather than null, so "has it"
+/// means non-empty once trimmed.
+String? _detail(
+  String? preferred,
+  List<CalendarEvent> occurrences,
+  String? Function(CalendarEvent) field,
+  int max,
+) {
+  final own = _clip(preferred, max);
+  if (own != null) return own;
+  for (final occurrence in occurrences.reversed) {
+    final value = _clip(field(occurrence), max);
+    if (value != null) return value;
+  }
+  return null;
 }
 
 /// The event's end as minutes since its start's midnight, so an event
