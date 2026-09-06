@@ -65,9 +65,14 @@ CalendarEvent calendarEventFrom(Event event) {
   );
 }
 
-/// Whether a plugin [Event] blocks a slot: not all-day, and not marked free.
+/// Whether a plugin [Event] blocks a slot: not all-day, not marked free, and
+/// with an end strictly after its start. Android allows `DTEND == DTSTART`
+/// (a zero-length event) and some sync sources produce an end before the
+/// start; neither should block anything.
 bool isBlockingEvent(Event event) {
-  return !event.isAllDay && event.availability != EventAvailability.free;
+  return !event.isAllDay &&
+      event.availability != EventAvailability.free &&
+      event.endDate.isAfter(event.startDate);
 }
 
 /// The real [CalendarGateway], wrapping [DeviceCalendar.instance].
