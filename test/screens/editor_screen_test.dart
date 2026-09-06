@@ -3,13 +3,60 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
 import 'package:recur/core/time_window.dart';
+import 'package:recur/data/booking_repository.dart';
+import 'package:recur/data/event_type_repository.dart';
+import 'package:recur/data/local_store.dart';
 import 'package:recur/data/models/event_type.dart';
+import 'package:recur/data/settings_repository.dart';
 import 'package:recur/screens/editor/editor_screen.dart';
 import 'package:recur/theme/app_theme.dart';
 import 'package:recur/widgets/confirm_button.dart';
 
 import '../helpers/fakes.dart';
 import '../helpers/golden.dart';
+
+/// A [LocalStore] that reads normally from [_inner] but throws on every
+/// write and delete, standing in for a full disk or a corrupt write.
+class _WriteThrowingLocalStore implements LocalStore {
+  _WriteThrowingLocalStore(this._inner);
+
+  final LocalStore _inner;
+
+  @override
+  Future<String?> read(String key) => _inner.read(key);
+
+  @override
+  Future<void> write(String key, String json) async {
+    throw Exception('write failed');
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    throw Exception('delete failed');
+  }
+}
+
+/// Rebuilds [testDeps] over a [_WriteThrowingLocalStore] backed by its own
+/// store, so anything already saved is still readable but every write or
+/// delete fails.
+TestDeps _withWriteFailure(TestDeps testDeps) {
+  final throwingStore = _WriteThrowingLocalStore(testDeps.store);
+  return TestDeps(
+    deps: AppDependencies(
+      clock: testDeps.deps.clock,
+      ids: testDeps.deps.ids,
+      eventTypes: LocalEventTypeRepository(throwingStore),
+      bookings: LocalBookingRepository(throwingStore),
+      settings: LocalSettingsRepository(throwingStore),
+      calendar: testDeps.calendar,
+      places: testDeps.places,
+    ),
+    calendar: testDeps.calendar,
+    places: testDeps.places,
+    clock: testDeps.clock,
+    store: testDeps.store,
+  );
+}
 
 EventType _ptSession() {
   return EventType(
@@ -181,6 +228,107 @@ void main() {
 
     expect(find.text('Edit event'), findsOneWidget);
     expect(await testDeps.deps.eventTypes.getById('et-1'), isNotNull);
+  });
+
+  testWidgets(
+    'the delete dialog names the card as it was saved, not the live draft',
+    (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await testDeps.deps.eventTypes.upsert(_ptSession());
+      await _pumpEditor(tester, testDeps, eventTypeId: 'et-1');
+
+      await tester.enterText(find.byType(TextField).first, 'Updated name');
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Delete event type'));
+      await tester.tap(find.text('Delete event type'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete "PT session"?'), findsOneWidget);
+      expect(find.text('Delete "Updated name"?'), findsNothing);
+    },
+  );
+
+  testWidgets('a failed save shows a snack bar and stays on the screen', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = _withWriteFailure(buildTestDeps());
+    await _pumpEditorPushed(tester, testDeps);
+
+    await tester.enterText(find.byType(TextField).first, 'PT session');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ConfirmButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('open'), findsNothing);
+    expect(find.text("Couldn't save."), findsOneWidget);
+    expect(await testDeps.deps.eventTypes.getAll(), isEmpty);
+  });
+
+  testWidgets('a failed delete shows a snack bar and stays on the screen', (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    await testDeps.deps.eventTypes.upsert(_ptSession());
+    final failing = _withWriteFailure(testDeps);
+    await _pumpEditorPushed(tester, failing, eventTypeId: 'et-1');
+
+    await tester.ensureVisible(find.text('Delete event type'));
+    await tester.tap(find.text('Delete event type'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('open'), findsNothing);
+    expect(find.text("Couldn't delete."), findsOneWidget);
+    expect(await testDeps.deps.eventTypes.getById('et-1'), isNotNull);
+  });
+
+  testWidgets(
+    'a card that no longer exists pops the route without writing anything',
+    (WidgetTester tester) async {
+      final testDeps = buildTestDeps();
+      await tester.pumpWidget(
+        AppScope(
+          deps: testDeps.deps,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const EditorScreen(eventTypeId: 'missing'),
+                      ),
+                    ),
+                    child: const Text('home'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('home'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('home'), findsOneWidget);
+      expect(find.byType(EditorScreen), findsNothing);
+      expect(await testDeps.deps.eventTypes.getAll(), isEmpty);
+    },
+  );
+
+  testWidgets("a read failure shows Couldn't open this card. with an app bar", (
+    WidgetTester tester,
+  ) async {
+    final testDeps = buildTestDeps();
+    await testDeps.store.write('event_types', 'not json');
+    await _pumpEditor(tester, testDeps, eventTypeId: 'et-1');
+
+    expect(find.text("Couldn't open this card."), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
   });
 
   group('preferred times', () {
