@@ -39,6 +39,21 @@ class EditorController extends ChangeNotifier {
 
   DateTime? _createdAt;
 
+  /// The name the card was saved under, set by [load] for an existing
+  /// card. Used instead of the live draft's [name] wherever the saved
+  /// card needs to be identified, e.g. the delete confirmation, so
+  /// clearing or changing the name field first does not change what the
+  /// dialog asks to delete.
+  String? savedName;
+
+  /// `true` once [load] has run for an [eventTypeId] that no card came
+  /// back for. The screen should not be shown in that case.
+  bool notFound = false;
+
+  /// `true` once [load] has run and the repository read threw. The
+  /// screen should show an error message instead of the form.
+  bool loadError = false;
+
   String name = '';
   bool nameTouched = false;
 
@@ -69,19 +84,26 @@ class EditorController extends ChangeNotifier {
   Future<void> load() async {
     final id = eventTypeId;
     if (id != null) {
-      final existing = await _deps.eventTypes.getById(id);
-      if (existing != null) {
-        name = existing.name;
-        durationMinutes = existing.durationMinutes;
-        isCustomDuration = !editorPresetDurations.contains(
-          existing.durationMinutes,
-        );
-        customDurationText = '${existing.durationMinutes}';
-        location = existing.location;
-        notes = existing.notes;
-        weekdays = Set.of(existing.preferredWeekdays);
-        windows = List.of(existing.preferredWindows);
-        _createdAt = existing.createdAt;
+      try {
+        final existing = await _deps.eventTypes.getById(id);
+        if (existing != null) {
+          name = existing.name;
+          durationMinutes = existing.durationMinutes;
+          isCustomDuration = !editorPresetDurations.contains(
+            existing.durationMinutes,
+          );
+          customDurationText = '${existing.durationMinutes}';
+          location = existing.location;
+          notes = existing.notes;
+          weekdays = Set.of(existing.preferredWeekdays);
+          windows = List.of(existing.preferredWindows);
+          _createdAt = existing.createdAt;
+          savedName = existing.name;
+        } else {
+          notFound = true;
+        }
+      } catch (_) {
+        loadError = true;
       }
     }
     _loading = false;

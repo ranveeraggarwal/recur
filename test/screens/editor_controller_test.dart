@@ -7,6 +7,71 @@ import 'package:recur/screens/editor/event_prefill.dart';
 import '../helpers/fakes.dart';
 
 void main() {
+  group('load', () {
+    test('loading an existing card sets savedName', () async {
+      final testDeps = buildTestDeps();
+      final original = EventType(
+        id: 'et-1',
+        name: 'PT session',
+        durationMinutes: 60,
+        preferredWeekdays: const {1, 2, 3, 4, 5},
+        preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
+        createdAt: DateTime(2020, 1, 1),
+      );
+      await testDeps.deps.eventTypes.upsert(original);
+
+      final controller = EditorController(
+        deps: testDeps.deps,
+        eventTypeId: 'et-1',
+      );
+      await controller.load();
+
+      expect(controller.savedName, 'PT session');
+      controller.setName('');
+      expect(controller.savedName, 'PT session');
+    });
+
+    test('a missing id sets notFound', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(
+        deps: testDeps.deps,
+        eventTypeId: 'missing',
+      );
+
+      await controller.load();
+
+      expect(controller.notFound, isTrue);
+      expect(controller.loadError, isFalse);
+      expect(controller.loading, isFalse);
+    });
+
+    test('a repository read failure sets loadError', () async {
+      final testDeps = buildTestDeps();
+      await testDeps.store.write('event_types', 'not json');
+      final controller = EditorController(
+        deps: testDeps.deps,
+        eventTypeId: 'et-1',
+      );
+
+      await controller.load();
+
+      expect(controller.loadError, isTrue);
+      expect(controller.notFound, isFalse);
+      expect(controller.loading, isFalse);
+    });
+
+    test('a new card sets neither notFound nor loadError', () async {
+      final testDeps = buildTestDeps();
+      final controller = EditorController(deps: testDeps.deps);
+
+      await controller.load();
+
+      expect(controller.notFound, isFalse);
+      expect(controller.loadError, isFalse);
+      expect(controller.savedName, isNull);
+    });
+  });
+
   group('validation', () {
     test('a new controller starts with the D18 defaults', () async {
       final testDeps = buildTestDeps();
