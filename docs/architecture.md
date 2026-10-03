@@ -5,9 +5,11 @@ A small app deserves a small architecture. Here is the whole thing.
 ## The tools
 
 Flutter 3.47.2 (Dart 3.13.2), Android only, minSdk 24, targetSdk 35. One
-plugin for the calendar, `device_calendar_plus` 0.8.0, `path_provider` for a
-folder to save files in, and `http` for the address lookup's calls to
-Nominatim. That is the full dependency list.
+plugin for reading the calendar, `device_calendar_plus` 0.8.0,
+`path_provider` for a folder to save files in, and `http` for the address
+lookup's calls to Nominatim. That is the full dependency list. Opening the
+calendar app on a new event needs no package: a small method channel in
+`MainActivity.kt` fires the intent.
 
 Before you push anything:
 
@@ -23,25 +25,27 @@ flutter build apk --debug
 ```
 lib/
   core/          dates, clocks, ids, and the little text formatters
-  data/          the three models and where they are saved
+  data/          the card model and where cards are saved
   calendar/      the gateway to the phone calendar, a fake, and the real one
+  history/       reading bookings back out of the calendar
   places/        the gateway to Nominatim, a fake, and the real one
   suggestions/   the slot logic
   theme/         every colour, size, and font, in one file
-  widgets/       cards, pills, tiles, buttons
-  screens/       home, editor, booking
+  widgets/       cards, pills, buttons
+  screens/       home, editor
 ```
 
 Four ideas hold it together.
 
 **One door to the calendar.** Everything that touches the phone calendar
 goes through a small interface called `CalendarGateway`. It can check and
-ask for permission, list calendars you can write to, fetch busy times,
-list whole events (for the Editor's `Copy from calendar`), say which event
-ids still exist, and create one event. It still never updates or deletes
-anything. There is a fake version that lives in memory, and every screen
+ask for permission, fetch busy times, list whole events (for the Editor's
+`Copy from calendar` and for the history scan), and open the calendar app
+on a new, filled-in event. It never writes, updates or deletes anything
+itself. There is a fake version that lives in memory, and every screen
 and every test uses the fake. Only one file in the whole app,
-`device_calendar_gateway.dart`, knows the plugin exists.
+`device_calendar_gateway.dart`, knows the plugin and the method channel
+exist.
 
 **Places gateway.** The Location field's address suggestions go through the
 same one-door rule, behind a small interface called `PlacesGateway`. Only
@@ -61,11 +65,12 @@ counts times of day in minutes since midnight (06:00 is 360, 22:00 is
 Nothing adds hours to midnight to find a slot; on the day the clocks change
 that would be an hour off. Tests that care run in the Stockholm zone.
 
-**Files, not a database.** The app has three things to remember: the cards,
-the bookings, and which calendar you chose. Each is a small JSON file in
-the app's folder, written to a temp name and renamed so a crash cannot leave
-a half-written file. Three repositories read and write them, one per thing.
-Tests swap in an in-memory store.
+**The calendar is the database.** The app keeps one file of its own: the
+cards, as JSON in the app's folder, written to a temp name and renamed so a
+crash cannot leave a half-written file. Tests swap in an in-memory store.
+What you booked is not stored anywhere in Recur. Every event Recur opens
+carries a marker in its notes, and the history is rebuilt from the
+calendar on every launch and every return to the app.
 
 ## The data
 
@@ -74,22 +79,75 @@ location and notes, the weekdays you prefer, and a non-empty list of
 `TimeWindow`s: the times of day that suit you, any one of which is enough
 for a slot to light up. Cards written before windows were a list are read
 back from the old `preferredStartMinutes`/`preferredEndMinutes` pair, so
-nothing on a phone needs migrating.
+nothing on a phone needs migrating. A card also has a two-character
+`code`, which names it inside the marker. A card saved before codes
+existed gets one the first time it is loaded.
 
-A **booking** has the card it belongs to, a start and end, and the id of
-the calendar and event it was written to. Bookings are never edited. They
-disappear when their card is deleted, or when the calendar event they
-point at does.
+An **occurrence** is not stored. It is what the history scan builds from a
+calendar event carrying a card's marker: the card code, the occurrence
+code, the event's id, and its start and end as they are now in the
+calendar.
 
-**Settings** is one optional string: the chosen calendar id.
+## The marker
+
+Every event Recur opens ends its notes with one line:
+
+```
+Booked with Recur - rcab3k7
+```
+
+`rc`, then the card code (`ab`), then the occurrence code (`3k7`). Both
+codes use only `0-9` and `a-z`, so there are 1,296 card codes and 46,656
+occurrence codes per card. The notes are the card's notes, a blank line,
+then the marker; a card with no notes gets the marker alone.
+
+- **Reading.** The scan looks for `Recur - rc` followed by exactly five of
+  those characters, anywhere in the event's notes. Text the user adds above
+  or below does not matter. An event whose marker line was deleted is not a
+  booking.
+- **Occurrence codes are random,** drawn fresh for every tap. Recur never
+  looks one up. Its job is to collapse copies: a duplicated event, or every
+  instance of an event the user made repeat, carries the same full code,
+  and the scan keeps only the earliest event with a given code.
+- **Card codes are never reused.** A deleted card's events stay in the
+  calendar with its code, so a new card's code avoids every code on a card
+  and every code the latest scan has seen. If the scan has not finished
+  when a card is saved, it avoids what has been seen so far.
+
+## The history scan
+
+`lib/history/` rebuilds every card's occurrences from the calendar. It
+runs on launch and whenever the app comes back to the foreground, which is
+how an event saved in the calendar app shows up. Nothing is cached between
+runs.
+
+It reads in rings around today, each read only covering what the last one
+did not:
+
+1. today ± 7 days,
+2. 7 to 30 days either side,
+3. 30 to 365 days either side.
+
+Each event is read once, so the whole scan costs one read of two years.
+After each ring Home updates and the progress bar advances a third.
+
+Because the rings move outwards, a card's answers settle early. The first
+ring holding a past occurrence of a card holds its latest one, and the
+first holding an upcoming occurrence holds its next one, so the card's
+line is final as soon as both are found, or the scan ends. Its suggestion
+window is final once three past occurrences are found. When every card
+has settled, the scan stops without reading further rings.
+
+The scan never throws. Without calendar access it reads nothing, every
+card shows no line, and suggestions fall back to the card's own windows.
 
 ## The slot logic
 
 Two pure functions, no side effects, easy to test.
 
-`suggestionWindowFor` takes a card and its bookings and returns a
+`suggestionWindowFor` takes a card and its occurrences and returns a
 suggestion: a set of weekdays plus a list of time spans. Fewer than three
-past bookings, it hands back the card's preference, every window of it.
+past occurrences, it hands back the card's preference, every window of it.
 Otherwise it takes the three most recent, picks the most common weekday
 (ties keep all), spans the earliest start to the latest end, pads by 30
 minutes, clamps to 06:00 to 22:00, and returns that one span in place of
@@ -106,19 +164,13 @@ only the appointment's tail runs into a later event. So an hour in the
 calendar greys the two rows it sits on, rather than every row an
 hour-long appointment could clash with.
 
-### Bookings that vanish from the calendar
-
-Recur writes an event and notes the booking, but the calendar belongs to
-the user and nothing tells the app when they delete something there.
-`pruneVanishedBookings` (`lib/data/booking_sync.dart`) closes the gap: on
-Home's load and on Booking's `init` it asks the gateway which of the
-booking event ids still exist and deletes the records that point at
-nothing. It checks each card's five most recent bookings only — the
-last-booked line reads one and the suggestion window reads three, so
-older records change nothing on screen and would cost a lookup each. It
-never throws, and it prunes nothing at all when the calendar cannot be
-read: no access is not the same as a deleted event, and guessing wrong
-would throw away history that cannot be got back.
+`firstSuggestedSlot` takes a card, its suggestion, the busy times, and
+"now", and returns one start time. It runs `buildSlotGrid` for each day
+from tomorrow through the next 14 days and returns the first
+`highlighted` slot, since highlighted already means not past, inside
+hours, clear of every busy interval, and inside the suggestion. If none of
+those days has one, it returns tomorrow at the start of the card's first
+preferred window, busy or not.
 
 ## The screens
 
@@ -127,14 +179,17 @@ with an `InheritedWidget` called `AppScope`. Screens navigate with plain
 `Navigator.push`. Each screen has its own small controller (a
 `ChangeNotifier`). No state-management library, no router library.
 
-When you confirm, the Booking controller writes the calendar event first
-and logs the booking second. If the calendar write itself fails, nothing is
-written or logged and you see `Couldn't add to calendar.` If the calendar
-write succeeds but logging the booking fails, the event is already in your
-calendar and you see `Added to your calendar, but Recur couldn't save the
-booking.`; Booking closes anyway, since Recur's own record really is
-missing and Confirm should not be tried again. The calendar it writes to is
-the one you chose, or the only writable one, or it asks.
+Tapping a card reads busy times for tomorrow through the next 14 days,
+takes the card's suggestion from the history scan as it stands (finished
+or not, so the tap never waits on it), picks the slot with
+`firstSuggestedSlot`, and asks the gateway to open the calendar app.
+The intent is `ACTION_INSERT` on `CalendarContract.Events.CONTENT_URI`
+with the begin and end time, title, location, and description (notes plus
+marker). Recur learns nothing back from it: the calendar app returns no
+result and no event id. Whatever the user saved turns up in the next scan,
+which starts when Recur comes back to the foreground. A phone with no app
+that takes the intent is not supported; if launching it fails, Home shows
+`Couldn't open your calendar.`
 
 Run the app against the fake calendar with
 `flutter run --dart-define=USE_FAKE_CALENDAR=true`.
@@ -155,26 +210,28 @@ completes, so loading them in the test body hangs until it times out.
 | | |
 | --- | --- |
 | State and routing | Plain Flutter. No packages. |
-| Storage | JSON files, one per thing, atomic writes. |
+| Storage | One JSON file, the cards, atomic writes. Bookings live in the calendar, found by the marker. |
 | Time | Local wall-clock. Minutes since midnight. `LocalDate.at`. |
-| "Past bookings" | Start is before now. The three most recent count. |
+| "Past bookings" | Occurrences whose start is before now. The three most recent count. |
 | Window padding | 30 minutes each side, clamped to 06:00 to 22:00. Too-small windows are kept. |
 | Slot precedence | Past, outside hours, overlap, highlighted, available. |
 | Blocked kinds | An overlap is a `conflict` when an event covers the row's own 30 minutes (and the row names it), else `doesNotFit` (`Not enough room`, on the plain surface, still not tappable). |
 | Conflicts | Every calendar. All-day and free events never block. Half-open overlap. |
-| Plugin use | Create events only. Never update or delete. |
+| Plugin use | Read only. New events are opened in the calendar app with `ACTION_INSERT` and saved by the user there. |
 | Places lookup | Nominatim: free, needs no API key, unlike Google Places or Mapbox. A convenience only - the Location field still works as plain text, and a failed or rate-limited lookup never blocks it. |
-| Calendar choice | Stored id if still writable, else the only writable one, else ask. |
-| Deleting a card | Removes its bookings in Recur. The calendar is untouched. |
-| Deleting an event in the calendar | Its booking is dropped from Recur on the next Home or Booking load. Five most recent per card are checked. A calendar that cannot be read prunes nothing. |
+| Deleting a card | Removes the card. Its events stay in the calendar, and its code is never given to another card. |
+| Marker | `Booked with Recur - rc` + 2-character card code + 3-character random occurrence code, `0-9a-z`, last line of the notes. Same full code on several events counts once, at the earliest. |
+| History | Rebuilt from the calendar on launch and on every return to the foreground, in rings of ±7 days, ±30 days, ±365 days. Nothing cached. A card settles once its latest past, next upcoming and three past occurrences are found; the scan stops when every card has settled. |
+| Suggested time | First highlighted slot from tomorrow through the next 14 days. None found: tomorrow at the start of the card's first window. Never today. |
+| Without calendar access | Home shows the access message above the cards. Cards show no line, and the suggested time uses the card's windows with no busy times. |
+| Changes made in the calendar app | Followed, not fought. The scan reads the event as it now is. |
+| Existing bookings | Not migrated. Bookings made before the marker existed carry no code, so cards start with no history. |
 | Preferred times | A non-empty list. Any window is enough for a slot to light up; each is validated on its own, and overlapping ones are allowed. |
 | Prefilling a card | `Copy from calendar` shows the last 90 days and next 30 days of the calendar as a week view; tapping an event copies it. All-day, untitled, and events under 5 or over 480 minutes are not offered. |
 | Where a prefilled detail comes from | The tapped occurrence supplies the name, duration, location and notes; every occurrence sharing the name supplies the weekdays and the window. A location or notes the tapped occurrence lacks is taken from the most recent occurrence that has one, treating `""` as missing since that is how Android stores a blank. |
 | Goldens | 380 px, DPR 1, Outfit, generated on Linux. |
 | Formatting | Hand-written English. No `intl`. |
 | Ids | 32 hex characters from a secure random. |
-| Confirm order | Calendar event first, booking log second. |
-| Weeks | Monday to Sunday. You cannot go back before this week. |
 | Editor defaults | 60 min, Mon to Fri, one window of 08:00 to 18:00. Custom duration 5 to 480 in steps of 5. |
 | Outfit font | Google Fonts ships Outfit only as a variable font, so the three static weights are instanced from it at 400, 500 and 600 with fontTools and vendored under `assets/fonts`. |
 | `formatLastBooked` signature | `Booking` does not exist yet, so it takes `{required DateTime? latestStart, required DateTime now}` instead of `(Booking? latest, DateTime now)`. |
@@ -183,7 +240,6 @@ completes, so loading them in the test body hangs until it times out.
 | `FixedClock` mutation API | `Clock.now` is an interface method, and Dart does not allow a method and a property setter to share a name in the same class, so `FixedClock` exposes `setNow(DateTime value)` as a plain method rather than a `now` setter. |
 | `EventType` trim contract | A `const` constructor can only assert potentially-constant expressions, and `String.trim()` is not one, so the constructor checks lengths only. Callers pass already-trimmed strings; `validateName` trims before checking. |
 | Extra validator messages | The product brief names only `Name is required.` and `End must be after start plus the duration.` The remaining bounds needed messages too, so `EventType` adds plainly worded ones in the same sentence case. |
-| `FakeCalendarGateway.createEvent` validation messages | The issue says it "mirrors the real plugin" for the `end`-after-`start` and non-empty-`title` checks but does not name the `ArgumentError` text, so it uses `ArgumentError.value` with plainly worded, sentence-case messages ("Must be after start.", "Must not be empty."). |
 | `ThemeData.textTheme` equality | `ThemeData` merges the `TextTheme` passed to `buildRecurTheme()` onto the Material 3 default typography (adding a matching text decoration colour, for one), so `theme.textTheme.displaySmall` etc. is never `==` to the raw `RecurText.display` token. `app_theme_test.dart` asserts the individual properties (family, size, weight, height, letterSpacing, color) instead of object equality. |
 | `RecurTextField` disabled state | The issue's constructor lists no `enabled` flag, so the disabled state (blocked fill, no helper/error text, ignores input) is driven by passing a `FocusNode(canRequestFocus: false)` via the existing `focusNode` parameter; `RecurTextField` treats `!focusNode.canRequestFocus` as disabled. |
 | Golden helper for unbounded animations | `ConfirmButton`'s busy `CircularProgressIndicator` animates forever, so `tester.pumpAndSettle()` in `pumpGolden` times out. Added an optional `settle` parameter (default `true`); passing `settle: false` pumps a single fixed 300ms frame instead, landing the spinner partway through its arc for a stable, non-blank golden. |
@@ -196,27 +252,17 @@ completes, so loading them in the test body hangs until it times out.
 | Editor's weekday picker widget | Issue #21 leaves the choice open ("reuse `DurationPill` with the weekday label, or a compact `DayPill` variant"). `DayPill` bakes in a day number and a suggestions dot that Editor has no use for, so the Editor's "Preferred weekdays" row reuses `DurationPill` (`selected`/unselected exactly matches the toggle look Editor needs) with the weekday abbreviation as its label. |
 | Editor's time-window picker widget | Issue #21 leaves the choice open ("two `DropdownMenu`s or a custom pill list"). Implemented as two `DropdownButtonFormField<int>`s (a private `_TimeField`) labelled "Start"/"End", styled with the same field decoration tokens as `RecurTextField` (`surface` fill, 1px `divider` border, `field` radius), listing every 30-minute mark from 06:00 to 22:00 via `formatMinutes`. |
 | `DurationPill` stretching to full width inside a bare `Wrap` | `Wrap` measures each child with `BoxConstraints(maxWidth: <wrap's own available width>)`, not a truly unbounded constraint, and `DurationPill`'s inner `Container(alignment: Alignment.center, ...)` (via `Align`) fills any *finite* max width it's offered — so a bare `Wrap` of `DurationPill`s stretches every pill to one-per-row at full width (confirmed empirically: `Size(348.0, 28.0)` per pill vs. the expected ~69px). Every `Wrap` of `DurationPill`s in the Editor (duration presets + Custom, and the seven weekday pills) wraps each child in `IntrinsicWidth`, which measures its child at its own intrinsic width first and reports that fixed width to `Wrap`, restoring the compact chip layout `Row` gives for free. |
-| `BookingController.showWeek` and the current-week floor | The excerpted `BookingController` API has no method to reject a `showWeek` call for a week before the current one — the product brief's "back is disabled when the displayed week is the current week" is phrased as a chevron (UI) state, not a controller invariant. `showWeek` therefore navigates to whatever `LocalDate` it's given; `BookingScreen` is the one that disables the back chevron's `onPressed` when `weekMonday == today.mondayOfWeek`, so a user can never trigger it, but a test calling `showWeek` directly with an earlier Monday would not be rejected. |
-| Selected date/slot when `showWeek` moves outside the current selection | Neither doc says what happens to `selectedDate`/`selectedSlot` when navigating to a week that doesn't contain them. `showWeek` resets `selectedDate` to the new `weekMonday` (so some day is always selected) and clears `selectedSlot` (matching the acceptance criterion that selection survives a week change only when the selected date stays in the displayed week). |
-| Booking app bar subtitle | `AppBar` has no built-in subtitle slot. The title is a two-line `Column` (`Text(name, style: title)` then `Text('$duration · $location', style: caption/muted)`), matching the product brief's "title = card name, subtitle in caption muted" without the location segment (and its `·` separator) when the card has no location. |
-| Booking's initial `Timeline` scroll offset | The product brief says the timeline "scrolled so the first highlighted slot of that day (or 08:00 if none) is near the top." Implemented as `ScrollController(initialScrollOffset: index * RecurSizes.slotRow)`, where `index` is the first `SlotState.highlighted` slot's position in the 32-slot grid, or the 08:00 slot's position (index 4) if none, or 0 as a final fallback. |
-| Access-state `ConfirmButton` "sized to content" | Superseded (M8 must-fix #57): `ConfirmButton` gained an `expand` flag (default `true`, preserving every existing full-width caller); the Booking access states pass `expand: false` so the button's own `SizedBox` drops its forced `width: double.infinity` and it sizes to the label's intrinsic width, replacing the earlier `SizedBox(width: 220)` approximation. |
-| `ConfirmBar` height at 88px with and without a summary | `docs/design-system.md` gives one `--confirm-bar: 88px` for both Booking (always a real summary line) and the Editor's Save bar (`summary: ''`), but the button is a fixed 52px and the caption line is a fixed 16px, so no single padding constant fits both. `ConfirmBar` now computes its vertical padding as `(RecurSizes.confirmBar - contentHeight) / 2`, where `contentHeight` is 52 (no summary) or 52 + 16 + RecurSpacing.sm (with one) — landing on 18px padding for the Editor and 6px for Booking, both referencing `RecurSizes.confirmBar` directly so the two callers can't drift apart again. The summary `Text`/gap is omitted entirely (not just collapsed to a zero-height line) when `summary` is empty. |
+| Access-state `ConfirmButton` "sized to content" | Superseded (M8 must-fix #57): `ConfirmButton` gained an `expand` flag (default `true`, preserving every existing full-width caller); the access states (now on Home) pass `expand: false` so the button's own `SizedBox` drops its forced `width: double.infinity` and it sizes to the label's intrinsic width, replacing the earlier `SizedBox(width: 220)` approximation. |
+| `ConfirmBar` height at 88px with and without a summary | `docs/design-system.md` gives one `--confirm-bar: 88px` for both Booking (always a real summary line, now removed) and the Editor's Save bar (`summary: ''`), but the button is a fixed 52px and the caption line is a fixed 16px, so no single padding constant fits both. `ConfirmBar` now computes its vertical padding as `(RecurSizes.confirmBar - contentHeight) / 2`, where `contentHeight` is 52 (no summary) or 52 + 16 + RecurSpacing.sm (with one) — landing on 18px padding for the Editor and 6px for Booking, both referencing `RecurSizes.confirmBar` directly so the two callers can't drift apart again. The summary `Text`/gap is omitted entirely (not just collapsed to a zero-height line) when `summary` is empty. |
 | `editor_delete_dialog` golden name | Issue #58 suggests "`editor_delete_dialog.png` (or similar name)". Used that exact name, at the standard `goldenWidth` (380px) with a 400px height (enough to fit the `EditorScreen` behind the dialog plus the centred `AlertDialog`), alongside the existing functional delete-dialog test in `editor_screen_test.dart` rather than a new file. |
-| `ConfirmationSheet`/`CalendarPickerSheet` drag handle | `showModalBottomSheet`'s built-in `showDragHandle` draws a handle in the sheet's own default styling, not `RecurColors.divider`/32×4px, and the design excerpt says to "draw the 32 x 4 px `divider` handle yourself." Both sheets pass `showDragHandle: false` (the default) and draw a private `_DragHandle`/inline `Container` (32×4, `divider`, radius 2, centred, 12px-ish from the top via the sheet's own top padding) as the first child instead. |
-| Confirmation sheet auto-dismiss timer | `showModalBottomSheet`'s `builder` doesn't get a `dispose` hook, so the 2-second auto-dismiss is a bare `Timer` started in `builder` that checks `Navigator.of(sheetContext).canPop()` before popping (guarding against the sheet already having been dismissed by a tap-outside or drag, which cancels nothing but the guard makes the resulting `pop()` a no-op instead of an error). |
-| Booking Confirm error handling | The product brief specifies the failure snack bar and "the screen stays as it was, selection intact," but not what happens to a partial failure inside `confirm()` itself. Per the architecture doc's confirm-ordering contract, `BookingController.confirm` always clears `isConfirming` in a `finally` block before rethrowing, and never clears `selectedSlot` on failure — only a successful confirm (via the screen popping to Home) ends the flow. |
-| `DeviceCalendarGateway.createEvent` wrapped-exception message | The issue's mapping table says to "wrap `DeviceCalendarException` and `PlatformException` in `CalendarWriteException`" but not what message to surface. `DeviceCalendarException` already carries a human-readable `message`, so that's passed straight through with the original exception as `cause`. `PlatformException` has no non-nullable message, so a plain fallback ("Failed to create calendar event.") is used when `e.message` is null, again with the original exception as `cause`. |
 | `buildDependencies` location | The issue offers `lib/main.dart` or `lib/bootstrap.dart` for the extracted factory. Kept it in `lib/main.dart`, next to `main()`: the function is small, it is the only caller besides the new test, and a separate `bootstrap.dart` would just be one more file to keep in sync for no real gain in testability. |
 | Release keystore path in `key.properties` | The issue names the four `key.properties` fields but not where the keystore file itself lives. `storeFile` is resolved with Gradle's `file()` from `android/app/build.gradle.kts`, so it is relative to `android/app` (matching the standard Flutter release-signing convention). CI writes the decoded keystore to `android/app/upload-keystore.jks` and `storeFile=upload-keystore.jks` in the properties it writes; a local `key.properties` can instead give an absolute path. |
 | `EventType`'s `preferredWindows` vs. the old pair | `EventType` keeps `preferredStartMinutes`/`preferredEndMinutes` as getters over the first and last window, so the Editor and the tests that only care about one window read the same as before, but `toJson` writes only `preferredWindows` and `fromJson` falls back to the old pair when the new key is absent. |
 | `TimeWindow`'s home | `lib/core/time_window.dart`, next to `LocalDate` and `time_of_day_minutes.dart`, rather than under `data/models/`: both the data layer (`EventType`) and the suggestion layer (`SuggestionWindow`) need it, and `core/` is the one place both already import. |
-| Which bookings the prune checks | Five per card. `latestForEventType` reads one and `suggestionWindowFor` reads three, so five leaves slack without turning a long history into one `getEvent` call per record on every Home load. Older records are left in the file: they change nothing on screen, and each prune moves the window along anyway. |
-| `FakeCalendarGateway.existingEventIds` fidelity | The fake reports an id as existing only when it created it, holds it in `events`, or was told about it through `knownEventIds`, matching the real gateway rather than assuming the best. A test that writes a booking straight to the repository therefore has to seed `knownEventIds`, which is the point: forgetting to is exactly the state this feature detects. |
 | Where the prefill logic lives | `prefillFor` is a pure function in `lib/screens/editor/event_prefill.dart`, so the fallbacks, rounding and clamping are unit-tested without a widget; `prefill_screen.dart` only reads the calendar and draws it. |
-| A calendar, not a list, for the picker | Picking the right past appointment is a "which Tuesday was that" question, so the week and the time of day are what identifies it. The picker reuses Booking's week header and day pills over an hour grid of event blocks. Unlike Booking it can go back, but only to the edges of the range it read, so a week on screen is always a week that was actually fetched. |
-| The picker's hour range | 06:00-22:00 like Booking, stretched to cover any event of that day outside those hours. A booking cannot be made outside them, but an event copied *from* can sit anywhere, and a block off the grid would be unreachable. |
+| A calendar, not a list, for the picker | Picking the right past appointment is a "which Tuesday was that" question, so the week and the time of day are what identifies it. The picker uses the week header and day pills over an hour grid of event blocks. It can go back, but only to the edges of the range it read, so a week on screen is always a week that was actually fetched. |
+| The picker's hour range | 06:00-22:00, the hours a suggestion can fall in, stretched to cover any event of that day outside those hours. A booking cannot be made outside them, but an event copied *from* can sit anywhere, and a block off the grid would be unreachable. |
 | Overlapping events in the picker | Each run of mutually overlapping events is split across as many columns as the run needs, every event in the run reporting the same column count so they line up. Without it a double-booked hour hides one of its events behind the other. |
 | One calendar read for the picker | The whole 90-day-back, 30-day-ahead range is read once on open, and week navigation filters it in memory. It is the same set the sibling-occurrence lookup needs anyway, and it keeps the chevrons instant. |
 | `Copy from calendar` on an existing card | Offered on a new card only. Prefilling replaces every field, which on an edit would quietly throw away what the user already has. |
-| `WeekHeader` | Booking's week header (chevrons around `Week of 7 Sep`) is now `lib/widgets/week_header.dart`, shared with the copy-from-calendar picker. A null callback greys its chevron, which is how Booking blocks going back before this week and the picker stops at the range it read. |
+| `WeekHeader` | The week header (chevrons around `Week of 7 Sep`) lives in `lib/widgets/week_header.dart`. With Booking gone, the copy-from-calendar picker is its only user. A null callback greys its chevron, which is how the picker stops at the range it read. |

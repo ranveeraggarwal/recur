@@ -73,18 +73,14 @@ placed and sized by the event's own time. The name on top, then a muted
 events at the same time share the width. Nothing shorter than 40 px, so
 even a 15-minute event can be read and tapped.
 
-**Slot tile.** One row of the timeline, 48 px tall. Available is plain
-sand-white. Highlighted has an 8% cedar wash and a 3 px cedar edge on the
-left. Selected is solid green with light text. Blocked is flat `blocked`
-grey with a muted reason on the right: the event's name, `Busy`, `Past`, or
-`Outside hours`, and only on the rows the event really covers. A row that
-is free itself but has no room for the appointment keeps the sand-white
-surface, goes muted, and reads `Not enough room`. Neither reacts to touch.
-
 **Confirm button.** Full width, 52 px, green, rounded 12 px. Disabled is
 `blocked` grey with muted text. While working it shows a small spinner
-instead of the label. It lives in an 88 px bar with a one-line summary
-above it. The Editor's Save button is the same component.
+instead of the label. It lives in an 88 px bar. The Editor's Save button
+is this component.
+
+**Progress bar.** A 2 px line straight under Home's app bar while the
+history scan runs: green over a `divider` track, moving a third at a time,
+gone when the scan ends. Nothing else on Home waits for it.
 
 **Text field.** Label above, sand-white box with a hairline `divider`
 border that turns into a 2 px green line when focused, or a 2 px `error`
@@ -94,11 +90,6 @@ counter.
 **Plus button.** A 56 px rounded square, not a circle, in green with a
 light plus sign and the fab shadow.
 
-**Sheets.** Sand-white, 20 px top corners, a small grey handle, 24 px
-padding. The confirmation sheet is a green check, `Booked`, the slot, and
-the card name. The calendar picker is `Write bookings to` and one 56 px row
-per calendar, with a green check on the chosen one.
-
 ## Screens at 380 px
 
 Home: a 56 px app bar with `Recur` in display size, 16 px margins, cards
@@ -107,16 +98,15 @@ pinned at the bottom. Its `Preferred times` group is one row per window —
 two `Start`/`End` fields side by side, with a muted × after them once
 there is more than one — over a green `Add a time` text button. A new
 card carries a green `Copy from calendar` text button above the name.
-Booking: a 72 px week header (`Week of 7 Sep` with 44 px chevrons), the
-day strip, a hairline, the timeline, the confirm bar. Copy from calendar
-wears the same header, day strip and hairline over an hour grid at 96 px
-an hour - two Booking rows - running 06:00 to 22:00, stretched to hold
-any event outside those hours. Access messages sit centred in body text
+Copy from calendar: a 72 px week header (`Week of 7 Sep` with 44 px
+chevrons), the day strip and a hairline over an hour grid at 96 px an
+hour, running 06:00 to 22:00, stretched to hold any event outside those
+hours. Home's access message sits above the cards, centred in body text
 with a content-sized button below.
 
 ## Words
 
-Short and plain, sentence case. `PT session`, `Confirm`, `Save`, `Booked`,
+Short and plain, sentence case. `PT session`, `Save`, `Booked for Tue 8 Sep`,
 `No events yet.` Never "flow", "ritual", or "breathe". No capitals, no
 exclamation marks.
 
