@@ -133,10 +133,7 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Delete "${controller.savedName ?? controller.name}"?'),
-        content: const Text(
-          'Past bookings are removed from Recur. '
-          'Calendar events are not touched.',
-        ),
+        content: const Text('Events already in your calendar stay there.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

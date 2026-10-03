@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,11 +10,9 @@ import 'calendar/device_calendar_gateway.dart';
 import 'calendar/fake_calendar_gateway.dart';
 import 'core/clock.dart';
 import 'core/id_generator.dart';
-import 'data/booking_repository.dart';
 import 'data/event_type_repository.dart';
 import 'data/json_file_local_store.dart';
 import 'data/local_store.dart';
-import 'data/settings_repository.dart';
 import 'places/nominatim_places_gateway.dart';
 
 /// Builds the app's [AppDependencies] on top of [store], swapping in
@@ -28,9 +27,8 @@ AppDependencies buildDependencies({
   return AppDependencies(
     clock: SystemClock(),
     ids: UuidLikeIdGenerator(),
+    random: Random.secure(),
     eventTypes: LocalEventTypeRepository(store),
-    bookings: LocalBookingRepository(store),
-    settings: LocalSettingsRepository(store),
     calendar: useFakeCalendar ? FakeCalendarGateway() : DeviceCalendarGateway(),
     places: NominatimPlacesGateway(),
   );

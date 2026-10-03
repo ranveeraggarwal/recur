@@ -219,6 +219,9 @@ class RecurSizes {
   /// SlotTile highlighted left border.
   static const double highlightBorder = 3;
 
+  /// Height of Home's history scan progress bar.
+  static const double progressBar = 2;
+
   /// Minimum height of an [EventCard] in the Home grid.
   static const double cardMinHeight = 132;
 }

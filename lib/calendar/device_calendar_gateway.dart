@@ -1,6 +1,8 @@
 /// The real [CalendarGateway], backed by `device_calendar_plus`.
 ///
-/// This is the only file in the app that imports `device_calendar_plus`.
+/// This is the only file in the app that imports `device_calendar_plus`, and
+/// the only one that talks to the method channel that opens the calendar
+/// app.
 /// Every screen and every test uses `FakeCalendarGateway` instead. See
 /// `docs/architecture.md`, section "DeviceCalendarGateway (real adapter,
 /// M7)".
@@ -23,16 +25,6 @@ CalendarAccess accessFromStatus(CalendarPermissionStatus status) {
     case CalendarPermissionStatus.restricted:
       return CalendarAccess.denied;
   }
-}
-
-/// Maps a plugin [Calendar] to a [CalendarInfo].
-CalendarInfo calendarInfoFrom(Calendar calendar) {
-  return CalendarInfo(
-    id: calendar.id,
-    name: calendar.name,
-    accountName: calendar.accountName,
-    isPrimary: calendar.isPrimary,
-  );
 }
 
 /// Maps a plugin [Event] to a [BusyInterval]. The title is trimmed; an
@@ -82,6 +74,10 @@ class DeviceCalendarGateway implements CalendarGateway {
 
   final DeviceCalendar _plugin;
 
+  /// Handled by `MainActivity.kt`, which fires `ACTION_INSERT` on the
+  /// calendar's events table.
+  static const _channel = MethodChannel('recur/calendar_intent');
+
   @override
   Future<CalendarAccess> checkAccess() async {
     return accessFromStatus(await _plugin.hasPermissions());
@@ -97,15 +93,6 @@ class DeviceCalendarGateway implements CalendarGateway {
   @override
   Future<void> openSystemSettings() async {
     await _plugin.openAppSettings();
-  }
-
-  @override
-  Future<List<CalendarInfo>> listWritableCalendars() async {
-    final calendars = await _plugin.listCalendars();
-    return calendars
-        .where((calendar) => !calendar.readOnly && !calendar.hidden)
-        .map(calendarInfoFrom)
-        .toList();
   }
 
   @override
@@ -132,20 +119,7 @@ class DeviceCalendarGateway implements CalendarGateway {
   }
 
   @override
-  Future<Set<String>> existingEventIds(Set<String> eventIds) async {
-    final alive = <String>{};
-    for (final id in eventIds) {
-      final event = await _plugin.getEvent(id);
-      if (event != null && event.status != EventStatus.canceled) {
-        alive.add(id);
-      }
-    }
-    return alive;
-  }
-
-  @override
-  Future<String> createEvent({
-    required String calendarId,
+  Future<void> openNewEvent({
     required String title,
     required DateTime start,
     required DateTime end,
@@ -153,21 +127,20 @@ class DeviceCalendarGateway implements CalendarGateway {
     String? notes,
   }) async {
     try {
-      return await _plugin.createEvent(
-        calendarId: calendarId,
-        title: title,
-        startDate: start,
-        endDate: end,
-        location: location,
-        description: notes,
-      );
-    } on DeviceCalendarException catch (e) {
-      throw CalendarWriteException(e.message, e);
+      await _channel.invokeMethod<void>('insertEvent', {
+        'title': title,
+        'beginMillis': start.millisecondsSinceEpoch,
+        'endMillis': end.millisecondsSinceEpoch,
+        'location': location,
+        'description': notes,
+      });
     } on PlatformException catch (e) {
-      throw CalendarWriteException(
-        e.message ?? 'Failed to create calendar event.',
+      throw CalendarOpenException(
+        e.message ?? 'Failed to open the calendar app.',
         e,
       );
+    } on MissingPluginException catch (e) {
+      throw CalendarOpenException('Failed to open the calendar app.', e);
     }
   }
 }

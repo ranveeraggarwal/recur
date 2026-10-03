@@ -316,7 +316,7 @@ void main() {
       expect(all.first.createdAt, testDeps.clock.now());
     });
 
-    test('editing an existing card keeps its id and createdAt', () async {
+    test('editing an existing card keeps its id, createdAt and code', () async {
       final testDeps = buildTestDeps();
       final original = EventType(
         id: 'et-1',
@@ -325,6 +325,7 @@ void main() {
         preferredWeekdays: const {1, 2, 3, 4, 5},
         preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
         createdAt: DateTime(2020, 1, 1),
+        code: 'k3',
       );
       await testDeps.deps.eventTypes.upsert(original);
 
@@ -340,6 +341,7 @@ void main() {
       final saved = await testDeps.deps.eventTypes.getById('et-1');
       expect(saved!.id, 'et-1');
       expect(saved.createdAt, DateTime(2020, 1, 1));
+      expect(saved.code, 'k3');
       expect(saved.name, 'PT session (updated)');
     });
 
@@ -360,32 +362,29 @@ void main() {
   });
 
   group('delete', () {
-    test(
-      'removes the card and its bookings, never touches the calendar',
-      () async {
-        final testDeps = buildTestDeps();
-        final original = EventType(
-          id: 'et-1',
-          name: 'PT session',
-          durationMinutes: 60,
-          preferredWeekdays: const {1, 2, 3, 4, 5},
-          preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
-          createdAt: DateTime(2020, 1, 1),
-        );
-        await testDeps.deps.eventTypes.upsert(original);
+    test('removes the card, never touches the calendar', () async {
+      final testDeps = buildTestDeps();
+      final original = EventType(
+        id: 'et-1',
+        name: 'PT session',
+        durationMinutes: 60,
+        preferredWeekdays: const {1, 2, 3, 4, 5},
+        preferredWindows: [TimeWindow(startMinutes: 480, endMinutes: 1080)],
+        createdAt: DateTime(2020, 1, 1),
+      );
+      await testDeps.deps.eventTypes.upsert(original);
 
-        final controller = EditorController(
-          deps: testDeps.deps,
-          eventTypeId: 'et-1',
-        );
-        await controller.load();
+      final controller = EditorController(
+        deps: testDeps.deps,
+        eventTypeId: 'et-1',
+      );
+      await controller.load();
 
-        await controller.delete();
+      await controller.delete();
 
-        expect(await testDeps.deps.eventTypes.getById('et-1'), isNull);
-        expect(await testDeps.deps.bookings.getForEventType('et-1'), isEmpty);
-        expect(testDeps.calendar.created, isEmpty);
-      },
-    );
+      expect(await testDeps.deps.eventTypes.getById('et-1'), isNull);
+      expect(testDeps.calendar.opened, isEmpty);
+      expect(testDeps.calendar.listQueries, isEmpty);
+    });
   });
 }

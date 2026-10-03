@@ -5,17 +5,17 @@ library;
 import '../core/local_date.dart';
 import '../core/time_of_day_minutes.dart';
 import '../core/time_window.dart';
-import '../data/models/booking.dart';
 import '../data/models/event_type.dart';
+import '../history/occurrence.dart';
 import 'suggestion_window.dart';
 
-/// Builds the [SuggestionWindow] for [eventType] given its [bookings], as of
-/// [now]. [bookings] may be in any order and may include future bookings;
-/// this filters to bookings with `start` before [now].
+/// Builds the [SuggestionWindow] for [eventType] given its [occurrences],
+/// as of [now]. [occurrences] may be in any order and may include future
+/// ones; this filters to occurrences with `start` before [now].
 ///
-/// With fewer than 3 past bookings, returns [eventType]'s stated preference
+/// With fewer than 3 past occurrences, returns [eventType]'s stated preference
 /// unchanged, keeping every window it lists. Otherwise the window is
-/// derived from the 3 most recent past bookings: the weekdays tied for the
+/// derived from the 3 most recent past occurrences: the weekdays tied for the
 /// most common count among the three, and the one time span from the
 /// earliest start-of-day minute to the latest end-of-day minute among
 /// them, padded by 30 minutes each side and clamped to 06:00-22:00. That
@@ -23,10 +23,10 @@ import 'suggestion_window.dart';
 /// and it replaces every window the card lists.
 SuggestionWindow suggestionWindowFor({
   required EventType eventType,
-  required List<Booking> bookings,
+  required List<Occurrence> occurrences,
   required DateTime now,
 }) {
-  final past = bookings.where((b) => b.start.isBefore(now)).toList()
+  final past = occurrences.where((b) => b.start.isBefore(now)).toList()
     ..sort((a, b) => b.start.compareTo(a.start));
 
   if (past.length < 3) {

@@ -27,6 +27,7 @@ final class EventType {
     required this.preferredWeekdays,
     required this.preferredWindows,
     required this.createdAt,
+    this.code,
   }) : assert(
          name.length > 0 && name.length <= 40,
          'name must be 1..40 trimmed characters',
@@ -52,6 +53,10 @@ final class EventType {
        assert(
          preferredWindows.length > 0,
          'preferredWindows must be non-empty',
+       ),
+       assert(
+         code == null || code.length == 2,
+         'code must be null or two characters',
        );
 
   final String id;
@@ -77,6 +82,12 @@ final class EventType {
   final List<TimeWindow> preferredWindows;
 
   final DateTime createdAt;
+
+  /// Two characters from `0-9a-z` that name this card inside the marker
+  /// Recur adds to its events' notes. `null` only for a card saved before
+  /// codes existed, or a new card not yet given one; Home assigns it. See
+  /// `docs/architecture.md`, section "The marker".
+  final String? code;
 
   /// The start of the first preferred window.
   int get preferredStartMinutes => preferredWindows.first.startMinutes;
@@ -155,6 +166,7 @@ final class EventType {
     Set<int>? preferredWeekdays,
     List<TimeWindow>? preferredWindows,
     DateTime? createdAt,
+    String? code,
   }) {
     return EventType(
       id: id ?? this.id,
@@ -167,6 +179,7 @@ final class EventType {
       preferredWeekdays: preferredWeekdays ?? this.preferredWeekdays,
       preferredWindows: preferredWindows ?? this.preferredWindows,
       createdAt: createdAt ?? this.createdAt,
+      code: code ?? this.code,
     );
   }
 
@@ -180,6 +193,7 @@ final class EventType {
       'preferredWeekdays': (preferredWeekdays.toList()..sort()),
       'preferredWindows': preferredWindows.map((w) => w.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
+      if (code != null) 'code': code,
     };
   }
 
@@ -214,6 +228,7 @@ final class EventType {
       createdAt: DateTime.parse(
         requireJson<String>(json, 'createdAt', 'EventType'),
       ),
+      code: _codeFrom(json),
     );
   }
 
@@ -227,7 +242,8 @@ final class EventType {
       other.notes == notes &&
       setEquals(other.preferredWeekdays, preferredWeekdays) &&
       timeWindowListEquals(other.preferredWindows, preferredWindows) &&
-      other.createdAt == createdAt;
+      other.createdAt == createdAt &&
+      other.code == code;
 
   @override
   int get hashCode => Object.hash(
@@ -239,6 +255,7 @@ final class EventType {
     Object.hashAllUnordered(preferredWeekdays),
     Object.hashAll(preferredWindows),
     createdAt,
+    code,
   );
 
   @override
@@ -281,4 +298,12 @@ String? _normalise(String? value) {
   if (value == null) return null;
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+/// Reads the card code, treating a missing or malformed one as `null` so
+/// Home assigns a fresh one rather than the file failing to load.
+String? _codeFrom(Map<String, dynamic> json) {
+  final raw = json['code'];
+  if (raw is! String || !RegExp(r'^[0-9a-z]{2}$').hasMatch(raw)) return null;
+  return raw;
 }

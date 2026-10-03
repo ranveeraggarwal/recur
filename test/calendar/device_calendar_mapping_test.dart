@@ -64,42 +64,6 @@ void main() {
     });
   });
 
-  group('calendarInfoFrom', () {
-    test('maps all fields', () {
-      const calendar = Calendar(
-        id: 'cal-1',
-        name: 'Personal',
-        readOnly: false,
-        accountName: 'me@example.com',
-        isPrimary: true,
-      );
-
-      expect(
-        calendarInfoFrom(calendar),
-        const CalendarInfo(
-          id: 'cal-1',
-          name: 'Personal',
-          accountName: 'me@example.com',
-          isPrimary: true,
-        ),
-      );
-    });
-
-    test('maps a calendar with no account name', () {
-      const calendar = Calendar(id: 'cal-2', name: 'Work', readOnly: false);
-
-      expect(
-        calendarInfoFrom(calendar),
-        const CalendarInfo(
-          id: 'cal-2',
-          name: 'Work',
-          accountName: null,
-          isPrimary: false,
-        ),
-      );
-    });
-  });
-
   group('busyIntervalFrom', () {
     test('trims the title', () {
       final event = _event(title: '  Dentist  ');

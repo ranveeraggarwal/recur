@@ -5,11 +5,9 @@ library;
 
 import 'calendar_gateway.dart';
 
-/// One event created via [FakeCalendarGateway.createEvent], in order.
-final class CreatedEvent {
-  const CreatedEvent({
-    required this.id,
-    required this.calendarId,
+/// One call to [FakeCalendarGateway.openNewEvent], in order.
+final class OpenedEvent {
+  const OpenedEvent({
     required this.title,
     required this.start,
     required this.end,
@@ -17,8 +15,6 @@ final class CreatedEvent {
     this.notes,
   });
 
-  final String id;
-  final String calendarId;
   final String title;
   final DateTime start;
   final DateTime end;
@@ -27,9 +23,7 @@ final class CreatedEvent {
 
   @override
   bool operator ==(Object other) =>
-      other is CreatedEvent &&
-      other.id == id &&
-      other.calendarId == calendarId &&
+      other is OpenedEvent &&
       other.title == title &&
       other.start == start &&
       other.end == end &&
@@ -37,21 +31,21 @@ final class CreatedEvent {
       other.notes == notes;
 
   @override
-  int get hashCode =>
-      Object.hash(id, calendarId, title, start, end, location, notes);
+  int get hashCode => Object.hash(title, start, end, location, notes);
 
   @override
   String toString() =>
-      'CreatedEvent(id: $id, calendarId: $calendarId, title: $title, '
-      'start: $start, end: $end, location: $location, notes: $notes)';
+      'OpenedEvent(title: $title, start: $start, end: $end, '
+      'location: $location, notes: $notes)';
 }
 
 /// A plain, mutable, `const`-free [CalendarGateway] that lives in memory.
 ///
 /// Tests poke the fields directly rather than going through a constructor:
 /// set [access] or [accessAfterRequest] to steer permission behaviour, seed
-/// [calendars], [busy], [events] or [knownEventIds], or set
-/// [failNextCreateWith] to make the next [createEvent] call fail.
+/// [busy] or [events], or set [failNextOpenWith] to make the next
+/// [openNewEvent] call fail. [saveOpened] stands in for the user tapping
+/// save in the calendar app.
 class FakeCalendarGateway implements CalendarGateway {
   /// What [checkAccess] returns, and the starting permission state.
   CalendarAccess access = CalendarAccess.granted;
@@ -62,38 +56,25 @@ class FakeCalendarGateway implements CalendarGateway {
   int requestAccessCalls = 0;
   int openSystemSettingsCalls = 0;
 
-  List<CalendarInfo> calendars = [
-    const CalendarInfo(
-      id: 'cal-1',
-      name: 'Personal',
-      accountName: 'me@example.com',
-      isPrimary: true,
-    ),
-  ];
-
   /// Busy intervals returned by [busyIntervals], in addition to one per
-  /// entry in [created].
+  /// timed entry in [events].
   final List<BusyInterval> busy = [];
 
-  /// Events returned by [listEvents], in addition to one per entry in
-  /// [created].
+  /// Every event in the calendar, returned by [listEvents].
   final List<CalendarEvent> events = [];
 
-  /// Event ids [existingEventIds] treats as still in the calendar, on top
-  /// of everything in [created] and [events]. Seed it from a test that
-  /// writes a booking straight to the repository, so the app does not read
-  /// the booking as pointing at a deleted event.
-  final Set<String> knownEventIds = {};
+  /// Every `(from, to)` pair [listEvents] was called with, in order.
+  final List<({DateTime from, DateTime to})> listQueries = [];
 
   /// Every `(from, to)` pair [busyIntervals] was called with, in order.
   final List<({DateTime from, DateTime to})> busyQueries = [];
 
-  /// Every [createEvent] call that succeeded, in order.
-  final List<CreatedEvent> created = [];
+  /// Every [openNewEvent] call that succeeded, in order.
+  final List<OpenedEvent> opened = [];
 
-  /// If set, the next [createEvent] call throws [CalendarWriteException]
+  /// If set, the next [openNewEvent] call throws [CalendarOpenException]
   /// with this message and then clears back to `null`.
-  String? failNextCreateWith;
+  String? failNextOpenWith;
 
   int _nextEventNumber = 1;
 
@@ -113,18 +94,6 @@ class FakeCalendarGateway implements CalendarGateway {
   }
 
   @override
-  Future<List<CalendarInfo>> listWritableCalendars() async {
-    // The real plugin throws a DeviceCalendarException without READ_CALENDAR,
-    // so the fake has to as well or a screen that forgets to check access
-    // passes every test and goes blank on a phone.
-    if (access != CalendarAccess.granted) {
-      throw StateError('listWritableCalendars requires access == granted.');
-    }
-
-    return List.of(calendars);
-  }
-
-  @override
   Future<List<BusyInterval>> busyIntervals({
     required DateTime from,
     required DateTime to,
@@ -137,8 +106,13 @@ class FakeCalendarGateway implements CalendarGateway {
 
     final all = [
       ...busy,
-      for (final event in created)
-        BusyInterval(start: event.start, end: event.end, title: event.title),
+      for (final event in events)
+        if (!event.isAllDay && event.end.isAfter(event.start))
+          BusyInterval(
+            start: event.start,
+            end: event.end,
+            title: event.title.isEmpty ? null : event.title,
+          ),
     ];
 
     final overlapping =
@@ -162,23 +136,10 @@ class FakeCalendarGateway implements CalendarGateway {
       throw StateError('listEvents requires access == granted.');
     }
 
-    final all = [
-      ...events,
-      for (final event in created)
-        CalendarEvent(
-          id: event.id,
-          calendarId: event.calendarId,
-          title: event.title,
-          start: event.start,
-          end: event.end,
-          isAllDay: false,
-          location: event.location,
-          notes: event.notes,
-        ),
-    ];
+    listQueries.add((from: from, to: to));
 
     final overlapping =
-        all
+        events
             .where(
               (event) => event.start.isBefore(to) && event.end.isAfter(from),
             )
@@ -189,49 +150,25 @@ class FakeCalendarGateway implements CalendarGateway {
   }
 
   @override
-  Future<Set<String>> existingEventIds(Set<String> eventIds) async {
-    if (access != CalendarAccess.granted) {
-      throw StateError('existingEventIds requires access == granted.');
-    }
-
-    final known = {
-      ...knownEventIds,
-      ...events.map((e) => e.id),
-      ...created.map((e) => e.id),
-    };
-    return eventIds.where(known.contains).toSet();
-  }
-
-  @override
-  Future<String> createEvent({
-    required String calendarId,
+  Future<void> openNewEvent({
     required String title,
     required DateTime start,
     required DateTime end,
     String? location,
     String? notes,
   }) async {
-    if (access != CalendarAccess.granted) {
-      throw StateError('createEvent requires access == granted.');
-    }
     if (!end.isAfter(start)) {
       throw ArgumentError.value(end, 'end', 'Must be after start.');
     }
-    if (title.isEmpty) {
-      throw ArgumentError.value(title, 'title', 'Must not be empty.');
+
+    if (failNextOpenWith != null) {
+      final message = failNextOpenWith!;
+      failNextOpenWith = null;
+      throw CalendarOpenException(message);
     }
 
-    if (failNextCreateWith != null) {
-      final message = failNextCreateWith!;
-      failNextCreateWith = null;
-      throw CalendarWriteException(message);
-    }
-
-    final id = 'evt-${_nextEventNumber++}';
-    created.add(
-      CreatedEvent(
-        id: id,
-        calendarId: calendarId,
+    opened.add(
+      OpenedEvent(
         title: title,
         start: start,
         end: end,
@@ -239,6 +176,23 @@ class FakeCalendarGateway implements CalendarGateway {
         notes: notes,
       ),
     );
-    return id;
+  }
+
+  /// Adds the last opened event to [events] as if the user saved it in
+  /// the calendar app, and returns it.
+  CalendarEvent saveOpened() {
+    final last = opened.last;
+    final event = CalendarEvent(
+      id: 'evt-${_nextEventNumber++}',
+      calendarId: 'cal-1',
+      title: last.title,
+      start: last.start,
+      end: last.end,
+      isAllDay: false,
+      location: last.location,
+      notes: last.notes,
+    );
+    events.add(event);
+    return event;
   }
 }

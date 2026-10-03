@@ -34,6 +34,10 @@ class EditorController extends ChangeNotifier {
 
   DateTime? _createdAt;
 
+  /// The loaded card's code, kept so an edit does not cut the card off
+  /// from its events in the calendar.
+  String? _code;
+
   /// The name the card was saved under, set by [load] for an existing
   /// card. Used instead of the live draft's [name] wherever the saved
   /// card needs to be identified, e.g. the delete confirmation, so
@@ -93,6 +97,7 @@ class EditorController extends ChangeNotifier {
           weekdays = Set.of(existing.preferredWeekdays);
           windows = List.of(existing.preferredWindows);
           _createdAt = existing.createdAt;
+          _code = existing.code;
           savedName = existing.name;
         } else {
           notFound = true;
@@ -260,17 +265,16 @@ class EditorController extends ChangeNotifier {
         preferredWeekdays: Set.of(weekdays),
         preferredWindows: List.of(windows),
         createdAt: createdAt,
+        code: _code,
       ),
     );
   }
 
-  /// Removes this card's local bookings, then the card itself. Never calls
-  /// the calendar gateway (decision D10: deleting a card never touches the
-  /// calendar).
+  /// Removes the card. Never calls the calendar gateway: the card's events
+  /// stay in the calendar.
   Future<void> delete() async {
     final id = eventTypeId;
     if (id == null) return;
-    await _deps.bookings.deleteForEventType(id);
     await _deps.eventTypes.delete(id);
   }
 }

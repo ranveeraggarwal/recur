@@ -1,11 +1,11 @@
+import 'dart:math';
+
 import 'package:flutter/widgets.dart';
 
 import 'calendar/calendar_gateway.dart';
 import 'core/clock.dart';
 import 'core/id_generator.dart';
-import 'data/booking_repository.dart';
 import 'data/event_type_repository.dart';
-import 'data/settings_repository.dart';
 import 'places/places_gateway.dart';
 
 /// Everything a screen needs, injected once at the root. See
@@ -14,18 +14,19 @@ final class AppDependencies {
   const AppDependencies({
     required this.clock,
     required this.ids,
+    required this.random,
     required this.eventTypes,
-    required this.bookings,
-    required this.settings,
     required this.calendar,
     required this.places,
   });
 
   final Clock clock;
   final IdGenerator ids;
+
+  /// Draws card and occurrence codes for the marker.
+  final Random random;
+
   final EventTypeRepository eventTypes;
-  final BookingRepository bookings;
-  final SettingsRepository settings;
   final CalendarGateway calendar;
   final PlacesGateway places;
 }
