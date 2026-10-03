@@ -31,4 +31,5 @@ TZ=Europe/Stockholm flutter test
 - `docs/product-brief.md` - what the app does and does not do.
 - `docs/architecture.md` - layers, interfaces, data model, decisions.
 - `docs/design-system.md` - colour, size and font tokens.
+- `docs/release.md` - how to cut a release.
 - `AGENTS.md` - toolchain, conventions, and known traps.
