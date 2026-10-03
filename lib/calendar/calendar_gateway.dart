@@ -7,9 +7,9 @@
 /// section "Calendar gateway".
 library;
 
-/// Whether the app can read and write the phone calendar.
+/// Whether the app can read the phone calendar.
 enum CalendarAccess {
-  /// Read and write granted.
+  /// Read granted.
   granted,
 
   /// Not asked yet, or asked and can ask again. [CalendarGateway.requestAccess]
@@ -19,37 +19,6 @@ enum CalendarAccess {
   /// The system dialog can no longer be shown.
   /// [CalendarGateway.openSystemSettings] is the only way out.
   denied,
-}
-
-/// A calendar the app can list or write to.
-final class CalendarInfo {
-  const CalendarInfo({
-    required this.id,
-    required this.name,
-    this.accountName,
-    required this.isPrimary,
-  });
-
-  final String id;
-  final String name;
-  final String? accountName;
-  final bool isPrimary;
-
-  @override
-  bool operator ==(Object other) =>
-      other is CalendarInfo &&
-      other.id == id &&
-      other.name == name &&
-      other.accountName == accountName &&
-      other.isPrimary == isPrimary;
-
-  @override
-  int get hashCode => Object.hash(id, name, accountName, isPrimary);
-
-  @override
-  String toString() =>
-      'CalendarInfo(id: $id, name: $name, accountName: $accountName, '
-      'isPrimary: $isPrimary)';
 }
 
 /// A half-open interval `[start, end)` in local time that blocks slots.
@@ -92,8 +61,7 @@ final class CalendarEvent {
     this.notes,
   });
 
-  /// Identifies this occurrence. The same value [CalendarGateway.createEvent]
-  /// returns and [CalendarGateway.existingEventIds] takes.
+  /// Identifies this occurrence.
   final String id;
 
   final String calendarId;
@@ -133,15 +101,16 @@ final class CalendarEvent {
       'CalendarEvent(id: $id, title: $title, start: $start, end: $end)';
 }
 
-/// Thrown when [CalendarGateway.createEvent] fails to write an event.
-class CalendarWriteException implements Exception {
-  CalendarWriteException(this.message, [this.cause]);
+/// Thrown when [CalendarGateway.openNewEvent] cannot open the calendar
+/// app, usually because the phone has none that takes the intent.
+class CalendarOpenException implements Exception {
+  CalendarOpenException(this.message, [this.cause]);
 
   final String message;
   final Object? cause;
 
   @override
-  String toString() => 'CalendarWriteException: $message';
+  String toString() => 'CalendarOpenException: $message';
 }
 
 /// The boundary the app talks to instead of the calendar plugin directly.
@@ -149,10 +118,6 @@ abstract interface class CalendarGateway {
   Future<CalendarAccess> checkAccess();
   Future<CalendarAccess> requestAccess();
   Future<void> openSystemSettings();
-
-  /// Calendars the app may write to. Read-only and hidden calendars are
-  /// excluded.
-  Future<List<CalendarInfo>> listWritableCalendars();
 
   /// Busy intervals from every readable calendar, overlapping `[from, to)`.
   /// Recurring events are expanded. All-day events and events with
@@ -172,15 +137,11 @@ abstract interface class CalendarGateway {
     required DateTime to,
   });
 
-  /// Which of [eventIds] the calendar still knows about. An id the user
-  /// has deleted from their calendar is left out of the result, so the app
-  /// can drop the booking that pointed at it. Requires `access == granted`.
-  Future<Set<String>> existingEventIds(Set<String> eventIds);
-
-  /// Creates one timed, non-recurring event. Returns the calendar event id.
-  /// Throws [CalendarWriteException] on failure.
-  Future<String> createEvent({
-    required String calendarId,
+  /// Opens the calendar app on a new event filled in with these details,
+  /// for the user to change and save there. Returns once the app has been
+  /// launched; nothing comes back about whether the user saved. Needs no
+  /// calendar access. Throws [CalendarOpenException] when no app takes it.
+  Future<void> openNewEvent({
     required String title,
     required DateTime start,
     required DateTime end,

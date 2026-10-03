@@ -3,11 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/calendar/calendar_gateway.dart';
 import 'package:recur/core/time_window.dart';
-import 'package:recur/data/booking_repository.dart';
 import 'package:recur/data/event_type_repository.dart';
 import 'package:recur/data/local_store.dart';
 import 'package:recur/data/models/event_type.dart';
-import 'package:recur/data/settings_repository.dart';
 import 'package:recur/screens/editor/editor_screen.dart';
 import 'package:recur/theme/app_theme.dart';
 import 'package:recur/widgets/confirm_button.dart';
@@ -45,9 +43,8 @@ TestDeps _withWriteFailure(TestDeps testDeps) {
     deps: AppDependencies(
       clock: testDeps.deps.clock,
       ids: testDeps.deps.ids,
+      random: testDeps.deps.random,
       eventTypes: LocalEventTypeRepository(throwingStore),
-      bookings: LocalBookingRepository(throwingStore),
-      settings: LocalSettingsRepository(throwingStore),
       calendar: testDeps.calendar,
       places: testDeps.places,
     ),
@@ -197,10 +194,7 @@ void main() {
 
       expect(find.text('Delete "PT session"?'), findsOneWidget);
       expect(
-        find.text(
-          'Past bookings are removed from Recur. '
-          'Calendar events are not touched.',
-        ),
+        find.text('Events already in your calendar stay there.'),
         findsOneWidget,
       );
 
@@ -209,7 +203,7 @@ void main() {
 
       expect(find.text('open'), findsOneWidget);
       expect(await testDeps.deps.eventTypes.getById('et-1'), isNull);
-      expect(testDeps.calendar.created, isEmpty);
+      expect(testDeps.calendar.opened, isEmpty);
     },
   );
 

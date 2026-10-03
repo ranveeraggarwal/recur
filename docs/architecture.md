@@ -218,6 +218,7 @@ completes, so loading them in the test body hangs until it times out.
 | Blocked kinds | An overlap is a `conflict` when an event covers the row's own 30 minutes (and the row names it), else `doesNotFit` (`Not enough room`, on the plain surface, still not tappable). |
 | Conflicts | Every calendar. All-day and free events never block. Half-open overlap. |
 | Plugin use | Read only. New events are opened in the calendar app with `ACTION_INSERT` and saved by the user there. |
+| `WRITE_CALENDAR` stays in the manifest | Recur never writes, but `device_calendar_plus` 0.8.0 refuses even a permission check unless `WRITE_CALENDAR` is declared, and its full-access request asks for both. Dropping it would break reading. |
 | Places lookup | Nominatim: free, needs no API key, unlike Google Places or Mapbox. A convenience only - the Location field still works as plain text, and a failed or rate-limited lookup never blocks it. |
 | Deleting a card | Removes the card. Its events stay in the calendar, and its code is never given to another card. |
 | Marker | `Booked with Recur - rc` + 2-character card code + 3-character random occurrence code, `0-9a-z`, last line of the notes. Same full code on several events counts once, at the earliest. |

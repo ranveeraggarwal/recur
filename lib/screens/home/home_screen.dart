@@ -6,13 +6,15 @@ import '../../app_scope.dart';
 import '../../calendar/calendar_gateway.dart';
 import '../../core/clock.dart';
 import '../../core/formatting.dart';
-import '../../data/booking_sync.dart';
 import '../../data/models/event_type.dart';
+import '../../history/history_scan.dart';
+import '../../history/marker.dart';
+import '../../suggestions/first_suggested_slot.dart';
+import '../../suggestions/suggestion_engine.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/access_state.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/recur_fab.dart';
-import '../booking/booking_screen.dart';
-import '../booking/calendar_picker_sheet.dart';
 import '../editor/editor_screen.dart';
 
 /// Height of one Home grid tile at text scale 1. Multiplied by the current
@@ -20,7 +22,8 @@ import '../editor/editor_screen.dart';
 const double _cardHeight = 148;
 
 /// The app's landing screen: a two-column grid of cards, one per event
-/// type, or an empty state when there are none.
+/// type, or an empty state when there are none. Tapping a card opens the
+/// calendar app on a new event at a suggested time.
 ///
 /// Reads its dependencies only through `AppScope.of(context)`.
 class HomeScreen extends StatefulWidget {
@@ -30,38 +33,39 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeCard {
-  const _HomeCard({required this.eventType, required this.latestStart});
-
-  final EventType eventType;
-
-  /// The start of the most recent booking for [eventType], or `null` if it
-  /// has never been booked.
-  final DateTime? latestStart;
-}
-
-class _HomeLoad {
-  const _HomeLoad({required this.cards, required this.writableCalendarCount});
-
-  final List<_HomeCard> cards;
-  final int writableCalendarCount;
-}
-
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   AppDependencies? _deps;
 
-  /// The last load that succeeded, kept while the next one runs so a reload
-  /// never blanks an already-drawn grid.
-  _HomeLoad? _data;
+  /// The cards from the last load that succeeded, kept while the next one
+  /// runs so a reload never blanks an already-drawn grid.
+  List<EventType>? _cards;
+
+  CalendarAccess? _access;
 
   /// Set when the most recent load threw, cleared when one succeeds.
   Object? _error;
+
+  /// The scan running now, or the one that last ran.
+  HistorySnapshot? _live;
+
+  /// The last scan that finished, shown for any card the running scan has
+  /// not settled yet, so a reload does not blank every card's line.
+  HistorySnapshot? _shown;
+
+  StreamSubscription<HistorySnapshot>? _scan;
+
+  /// Card codes seen in any scan this session, so a new card's code never
+  /// matches a deleted card's events.
+  final Set<String> _seenCardCodes = {};
 
   /// Bumped by every [_reload] so a slow earlier load cannot overwrite the
   /// result of a later one.
   int _loadGeneration = 0;
 
   bool _loadStarted = false;
+
+  /// Set while a tap is working out its slot, so a second tap waits.
+  bool _opening = false;
 
   @override
   void initState() {
@@ -72,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_scan?.cancel());
     super.dispose();
   }
 
@@ -91,59 +96,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed || !mounted) {
       return;
     }
-    // A resume while Booking or the Editor is on top would reload Home
-    // underneath for nothing; those screens reload it when they pop.
+    // A resume while the Editor is on top would reload Home underneath for
+    // nothing; it reloads Home when it pops. Coming back from the calendar
+    // app lands here, which is how a just-saved event shows up.
     if (ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
     unawaited(_reload());
   }
 
-  Future<_HomeLoad> _load() async {
+  /// Gives every card without a code one that no card has and no scan has
+  /// seen, and saves it.
+  Future<List<EventType>> _withCodes(List<EventType> cards) async {
     final deps = _deps!;
-    var access = await deps.calendar.checkAccess();
-    if (access == CalendarAccess.notDetermined) {
-      // Not asked yet: show the OS permission dialog now, rather than
-      // waiting for the user to open Booking.
-      access = await deps.calendar.requestAccess();
+    final taken = {
+      ..._seenCardCodes,
+      for (final card in cards)
+        if (card.code != null) card.code!,
+    };
+    final result = <EventType>[];
+    for (final card in cards) {
+      if (card.code != null) {
+        result.add(card);
+        continue;
+      }
+      final code = newCardCode(deps.random, taken);
+      taken.add(code);
+      final coded = card.copyWith(code: code);
+      await deps.eventTypes.upsert(coded);
+      result.add(coded);
     }
-
-    // An event deleted in the calendar app leaves its booking behind, so
-    // drop those before the cards read their last-booked line.
-    await pruneVanishedBookings(
-      bookings: deps.bookings,
-      calendar: deps.calendar,
-    );
-
-    final eventTypes = await deps.eventTypes.getAll();
-    final cards = <_HomeCard>[];
-    for (final eventType in eventTypes) {
-      final latest = await deps.bookings.latestForEventType(eventType.id);
-      cards.add(_HomeCard(eventType: eventType, latestStart: latest?.start));
-    }
-
-    // Listing calendars without access throws on a real phone, so only ask
-    // when access was granted.
-    final writableCalendarCount = access == CalendarAccess.granted
-        ? (await deps.calendar.listWritableCalendars()).length
-        : 0;
-    return _HomeLoad(
-      cards: cards,
-      writableCalendarCount: writableCalendarCount,
-    );
+    return result;
   }
 
   Future<void> _reload() async {
+    final deps = _deps!;
     final generation = ++_loadGeneration;
     try {
-      final data = await _load();
+      var access = await deps.calendar.checkAccess();
+      if (access == CalendarAccess.notDetermined) {
+        // Not asked yet: show the OS permission dialog straight away.
+        access = await deps.calendar.requestAccess();
+      }
+      final cards = await _withCodes(await deps.eventTypes.getAll());
       if (!mounted || generation != _loadGeneration) {
         return;
       }
       setState(() {
-        _data = data;
+        _cards = cards;
+        _access = access;
         _error = null;
       });
+      _startScan(cards);
     } catch (error) {
       if (!mounted || generation != _loadGeneration) {
         return;
@@ -152,6 +156,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _error = error;
       });
     }
+  }
+
+  void _startScan(List<EventType> cards) {
+    final deps = _deps!;
+    unawaited(_scan?.cancel());
+    if (_live != null && _live!.done) {
+      _shown = _live;
+    }
+    setState(() {
+      _live = HistorySnapshot.initial;
+    });
+    _scan =
+        scanHistory(
+          calendar: deps.calendar,
+          now: deps.clock.now(),
+          cardCodes: {
+            for (final card in cards)
+              if (card.code != null) card.code!,
+          },
+        ).listen((snapshot) {
+          if (!mounted) return;
+          _seenCardCodes.addAll(snapshot.seenCardCodes);
+          setState(() {
+            _live = snapshot;
+            if (snapshot.done) {
+              _shown = snapshot;
+            }
+          });
+        });
+  }
+
+  /// The snapshot to read [code]'s history from: the running scan once it
+  /// has settled that card, else the last finished scan, else the running
+  /// one.
+  HistorySnapshot? _historySource(String? code) {
+    final live = _live;
+    if (live != null && live.isSettled(code)) return live;
+    return _shown ?? live;
   }
 
   Future<void> _openEditor(String? eventTypeId) async {
@@ -165,42 +207,138 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openBooking(String eventTypeId) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (context) => BookingScreen(eventTypeId: eventTypeId),
-      ),
-    );
+  Future<void> _requestAccess() async {
+    await _deps!.calendar.requestAccess();
     await _reload();
+  }
+
+  Future<void> _openSettings() async {
+    await _deps!.calendar.openSystemSettings();
+  }
+
+  Future<void> _book(EventType card) async {
+    if (_opening) return;
+    _opening = true;
+    final deps = _deps!;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final now = deps.clock.now();
+      final past = _historySource(card.code)?.historyFor(card.code).past;
+      final window = suggestionWindowFor(
+        eventType: card,
+        occurrences: past ?? const [],
+        now: now,
+      );
+
+      var busy = const <BusyInterval>[];
+      if (_access == CalendarAccess.granted) {
+        final range = suggestionSearchRange(now);
+        try {
+          busy = await deps.calendar.busyIntervals(
+            from: range.from,
+            to: range.to,
+          );
+        } catch (_) {
+          // A suggestion that ignores busy times still beats no event.
+        }
+      }
+      final slot = firstSuggestedSlot(
+        eventType: card,
+        window: window,
+        busy: busy,
+        now: now,
+      );
+
+      final cardCode = card.code ?? (await _withCodes([card])).single.code!;
+      final marker = markerLine(
+        cardCode: cardCode,
+        occurrenceCode: randomCode(deps.random, occurrenceCodeLength),
+      );
+
+      await deps.calendar.openNewEvent(
+        title: card.name,
+        start: slot.start,
+        end: slot.end,
+        location: card.location,
+        notes: notesWithMarker(card.notes, marker),
+      );
+    } on CalendarOpenException {
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Couldn't open your calendar.")),
+      );
+    } finally {
+      _opening = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = _data;
+    final live = _live;
+    final scanning = live != null && !live.done;
+    final access = _access;
+    final showAccess =
+        _error == null && access != null && access != CalendarAccess.granted;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recur', style: RecurText.display),
-        actions: [
-          if ((data?.writableCalendarCount ?? 0) >= 2)
-            IconButton(
-              icon: const Icon(Icons.calendar_today_outlined),
-              tooltip: 'Choose calendar',
-              onPressed: () => unawaited(showCalendarPicker(context)),
+      appBar: AppBar(title: const Text('Recur', style: RecurText.display)),
+      body: Stack(
+        children: [
+          if (_error != null)
+            const _HomeReadError()
+          else
+            Column(
+              children: [
+                if (showAccess)
+                  Padding(
+                    padding: const EdgeInsets.only(top: RecurSpacing.xl),
+                    child: AccessState(
+                      access: access,
+                      hasWritableCalendar: true,
+                      message:
+                          'Recur needs calendar access to see what you have '
+                          'booked.',
+                      onRequestAccess: () => unawaited(_requestAccess()),
+                      onOpenSettings: () => unawaited(_openSettings()),
+                    ),
+                  ),
+                Expanded(
+                  child: _HomeBody(
+                    cards: _cards,
+                    clock: _deps!.clock,
+                    lineFor: _lineFor,
+                    onBook: (card) => unawaited(_book(card)),
+                    onOpenEditor: (id) => unawaited(_openEditor(id)),
+                  ),
+                ),
+              ],
+            ),
+          if (scanning)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(
+                value: live.progress,
+                minHeight: RecurSizes.progressBar,
+                color: RecurColors.primary,
+                backgroundColor: RecurColors.divider,
+              ),
             ),
         ],
       ),
-      body: _error != null
-          ? const _HomeReadError()
-          : _HomeBody(
-              data: data,
-              clock: _deps!.clock,
-              onOpenBooking: (id) => unawaited(_openBooking(id)),
-              onOpenEditor: (id) => unawaited(_openEditor(id)),
-            ),
       floatingActionButton: RecurFab(
         onPressed: () => unawaited(_openEditor(null)),
       ),
     );
+  }
+
+  /// The start [card]'s line describes, and whether a line is known yet.
+  ({bool known, DateTime? start}) _lineFor(EventType card) {
+    final source = _historySource(card.code);
+    if (source == null || !source.hasAccess || !source.isSettled(card.code)) {
+      return (known: false, start: null);
+    }
+    return (known: true, start: source.historyFor(card.code).lineStart);
   }
 }
 
@@ -228,17 +366,19 @@ class _HomeReadError extends StatelessWidget {
 
 class _HomeBody extends StatelessWidget {
   const _HomeBody({
-    required this.data,
+    required this.cards,
     required this.clock,
-    required this.onOpenBooking,
+    required this.lineFor,
+    required this.onBook,
     required this.onOpenEditor,
   });
 
-  final _HomeLoad? data;
+  final List<EventType>? cards;
   final Clock clock;
+  final ({bool known, DateTime? start}) Function(EventType card) lineFor;
 
-  /// Called with the tapped card's event type id.
-  final ValueChanged<String> onOpenBooking;
+  /// Called with the tapped card.
+  final ValueChanged<EventType> onBook;
 
   /// Called with the long-pressed card's event type id, or `null` from the
   /// FAB.
@@ -246,12 +386,12 @@ class _HomeBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = this.data;
-    if (data == null) {
+    final cards = this.cards;
+    if (cards == null) {
       return const SizedBox.shrink();
     }
 
-    if (data.cards.isEmpty) {
+    if (cards.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -280,23 +420,24 @@ class _HomeBody extends StatelessWidget {
         mainAxisSpacing: RecurSpacing.lg,
         mainAxisExtent: _cardHeight * textScale,
       ),
-      itemCount: data.cards.length,
+      itemCount: cards.length,
       itemBuilder: (context, index) {
-        final card = data.cards[index];
+        final card = cards[index];
         final column = index.isEven ? CardColumn.one : CardColumn.two;
-        final latestStart = card.latestStart;
-        final lastBookedIsFuture =
-            latestStart != null && latestStart.isAfter(now);
+        final line = lineFor(card);
+        final start = line.start;
 
         return EventCard(
-          name: card.eventType.name,
-          durationMinutes: card.eventType.durationMinutes,
-          location: card.eventType.location,
-          lastBookedText: formatLastBooked(latestStart: latestStart, now: now),
-          lastBookedIsFuture: lastBookedIsFuture,
+          name: card.name,
+          durationMinutes: card.durationMinutes,
+          location: card.location,
+          lastBookedText: line.known
+              ? formatLastBooked(latestStart: start, now: now)
+              : '',
+          lastBookedIsFuture: start != null && start.isAfter(now),
           column: column,
-          onTap: () => onOpenBooking(card.eventType.id),
-          onLongPress: () => onOpenEditor(card.eventType.id),
+          onTap: () => onBook(card),
+          onLongPress: () => onOpenEditor(card.id),
         );
       },
     );

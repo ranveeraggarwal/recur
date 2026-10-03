@@ -2,26 +2,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recur/core/local_date.dart';
 import 'package:recur/core/time_of_day_minutes.dart';
 import 'package:recur/core/time_window.dart';
-import 'package:recur/data/models/booking.dart';
 import 'package:recur/data/models/event_type.dart';
+import 'package:recur/history/occurrence.dart';
 import 'package:recur/suggestions/suggestion_engine.dart';
 import 'package:recur/suggestions/suggestion_window.dart';
 
-/// Builds a [Booking] starting at [start] and lasting [minutes], with
+/// Builds an [Occurrence] starting at [start] and lasting [minutes], with
 /// `end = LocalDate.fromDateTime(start).at(minutesOfDay(start) + minutes)`
-/// so a booking whose minutes push past midnight naturally crosses into the
-/// next calendar date. Ids are dummy values; nothing in the engine reads
-/// them.
-Booking booking(DateTime start, int minutes) {
+/// so one whose minutes push past midnight naturally crosses into the next
+/// calendar date. Codes and ids are dummy values; nothing in the engine
+/// reads them.
+Occurrence booking(DateTime start, int minutes) {
   final end = LocalDate.fromDateTime(start).at(minutesOfDay(start) + minutes);
-  return Booking(
-    id: 'bk-${start.toIso8601String()}',
-    eventTypeId: 'et1',
+  return Occurrence(
+    cardCode: 'ab',
+    occurrenceCode: '000',
+    eventId: 'evt-${start.toIso8601String()}',
     start: start,
     end: end,
-    calendarId: '1',
-    calendarEventId: 'evt-${start.toIso8601String()}',
-    createdAt: start,
   );
 }
 
@@ -60,7 +58,7 @@ void main() {
   test('no bookings -> preference window', () {
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: const [],
+      occurrences: const [],
       now: now,
     );
 
@@ -75,7 +73,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -91,7 +89,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -114,7 +112,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -135,7 +133,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -157,7 +155,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -174,7 +172,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -192,7 +190,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -214,7 +212,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -230,7 +228,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -249,7 +247,7 @@ void main() {
 
       final window = suggestionWindowFor(
         eventType: card(),
-        bookings: bookings,
+        occurrences: bookings,
         now: now,
       );
 
@@ -272,7 +270,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(durationMinutes: 120),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -291,7 +289,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 
@@ -307,7 +305,7 @@ void main() {
 
     final window = suggestionWindowFor(
       eventType: card(),
-      bookings: bookings,
+      occurrences: bookings,
       now: now,
     );
 

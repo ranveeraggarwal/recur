@@ -1,12 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:recur/app_scope.dart';
 import 'package:recur/calendar/fake_calendar_gateway.dart';
 import 'package:recur/core/clock.dart';
 import 'package:recur/core/id_generator.dart';
-import 'package:recur/data/booking_repository.dart';
 import 'package:recur/data/event_type_repository.dart';
 import 'package:recur/data/local_store.dart';
-import 'package:recur/data/settings_repository.dart';
 import 'package:recur/places/fake_places_gateway.dart';
 import 'package:recur/theme/app_theme.dart';
 
@@ -32,7 +32,7 @@ class TestDeps {
 }
 
 /// Builds a [TestDeps] backed by [FixedClock] (default [_defaultNow], a
-/// Monday), [SequentialIdGenerator], [InMemoryLocalStore], a
+/// Monday), [SequentialIdGenerator], a seeded [Random], [InMemoryLocalStore], a
 /// [FakeCalendarGateway], and a [FakePlacesGateway].
 TestDeps buildTestDeps({DateTime? now}) {
   final clock = FixedClock(now ?? _defaultNow);
@@ -43,9 +43,8 @@ TestDeps buildTestDeps({DateTime? now}) {
   final deps = AppDependencies(
     clock: clock,
     ids: SequentialIdGenerator(),
+    random: Random(1),
     eventTypes: LocalEventTypeRepository(store),
-    bookings: LocalBookingRepository(store),
-    settings: LocalSettingsRepository(store),
     calendar: calendar,
     places: places,
   );

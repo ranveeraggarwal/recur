@@ -3,28 +3,6 @@ import 'package:recur/calendar/calendar_gateway.dart';
 import 'package:recur/calendar/fake_calendar_gateway.dart';
 
 void main() {
-  group('CalendarInfo', () {
-    test('value equality', () {
-      const a = CalendarInfo(
-        id: 'cal-1',
-        name: 'Personal',
-        accountName: 'me@example.com',
-        isPrimary: true,
-      );
-      const b = CalendarInfo(
-        id: 'cal-1',
-        name: 'Personal',
-        accountName: 'me@example.com',
-        isPrimary: true,
-      );
-      const c = CalendarInfo(id: 'cal-2', name: 'Work', isPrimary: false);
-
-      expect(a, equals(b));
-      expect(a.hashCode, equals(b.hashCode));
-      expect(a, isNot(equals(c)));
-    });
-  });
-
   group('BusyInterval', () {
     test('value equality', () {
       final start = DateTime(2026, 9, 4, 10);
@@ -50,35 +28,25 @@ void main() {
     });
   });
 
-  group('CreatedEvent', () {
+  group('OpenedEvent', () {
     test('value equality', () {
       final start = DateTime(2026, 9, 4, 10);
       final end = DateTime(2026, 9, 4, 11);
-      final a = CreatedEvent(
-        id: 'evt-1',
-        calendarId: 'cal-1',
+      final a = OpenedEvent(
         title: 'Physio',
         start: start,
         end: end,
         location: 'Clinic',
         notes: 'Bring towel',
       );
-      final b = CreatedEvent(
-        id: 'evt-1',
-        calendarId: 'cal-1',
+      final b = OpenedEvent(
         title: 'Physio',
         start: start,
         end: end,
         location: 'Clinic',
         notes: 'Bring towel',
       );
-      final c = CreatedEvent(
-        id: 'evt-2',
-        calendarId: 'cal-1',
-        title: 'Physio',
-        start: start,
-        end: end,
-      );
+      final c = OpenedEvent(title: 'Physio', start: start, end: end);
 
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
@@ -128,41 +96,6 @@ void main() {
       await gateway.openSystemSettings();
 
       expect(gateway.openSystemSettingsCalls, 2);
-    });
-
-    test(
-      'listWritableCalendars throws StateError unless access == granted',
-      () {
-        gateway.access = CalendarAccess.notDetermined;
-        expect(gateway.listWritableCalendars, throwsA(isA<StateError>()));
-
-        gateway.access = CalendarAccess.denied;
-        expect(gateway.listWritableCalendars, throwsA(isA<StateError>()));
-      },
-    );
-
-    test('listWritableCalendars returns a copy of calendars', () async {
-      final defaults = await gateway.listWritableCalendars();
-      expect(defaults, [
-        const CalendarInfo(
-          id: 'cal-1',
-          name: 'Personal',
-          accountName: 'me@example.com',
-          isPrimary: true,
-        ),
-      ]);
-
-      gateway.calendars = [
-        const CalendarInfo(id: 'cal-2', name: 'Work', isPrimary: false),
-      ];
-      final result = await gateway.listWritableCalendars();
-
-      expect(result, gateway.calendars);
-      expect(identical(result, gateway.calendars), isFalse);
-
-      // Mutating the returned list must not affect the gateway's field.
-      result.clear();
-      expect(gateway.calendars, hasLength(1));
     });
 
     group('busyIntervals', () {
@@ -270,156 +203,116 @@ void main() {
         expect(result, [touching]);
       });
 
-      test('a created event shows up in the next busyIntervals call', () async {
-        final start = DateTime(2026, 9, 4, 10);
-        final end = DateTime(2026, 9, 4, 11);
+      test(
+        'timed events in events count as busy, all-day ones do not',
+        () async {
+          gateway.events.addAll([
+            CalendarEvent(
+              id: 'evt-1',
+              calendarId: 'cal-1',
+              title: 'Physio',
+              start: DateTime(2026, 9, 4, 10),
+              end: DateTime(2026, 9, 4, 11),
+              isAllDay: false,
+            ),
+            CalendarEvent(
+              id: 'evt-2',
+              calendarId: 'cal-1',
+              title: 'Holiday',
+              start: DateTime(2026, 9, 4),
+              end: DateTime(2026, 9, 5),
+              isAllDay: true,
+            ),
+          ]);
 
-        await gateway.createEvent(
-          calendarId: 'cal-1',
-          title: 'Physio',
-          start: start,
-          end: end,
-        );
+          final result = await gateway.busyIntervals(
+            from: DateTime(2026, 9, 4, 9),
+            to: DateTime(2026, 9, 4, 17),
+          );
 
-        final result = await gateway.busyIntervals(
-          from: DateTime(2026, 9, 4, 9),
-          to: DateTime(2026, 9, 4, 17),
-        );
-
-        expect(result, [BusyInterval(start: start, end: end, title: 'Physio')]);
-      });
+          expect(result, [
+            BusyInterval(
+              start: DateTime(2026, 9, 4, 10),
+              end: DateTime(2026, 9, 4, 11),
+              title: 'Physio',
+            ),
+          ]);
+        },
+      );
     });
 
-    group('createEvent', () {
-      test('throws StateError unless access == granted', () {
-        gateway.access = CalendarAccess.notDetermined;
-        expect(
-          () => gateway.createEvent(
-            calendarId: 'cal-1',
+    group('openNewEvent', () {
+      test('records the call and works without access', () async {
+        gateway.access = CalendarAccess.denied;
+
+        await gateway.openNewEvent(
+          title: 'Physio',
+          start: DateTime(2026, 9, 4, 10),
+          end: DateTime(2026, 9, 4, 11),
+          location: 'Clinic',
+          notes: 'Booked with Recur - rcab123',
+        );
+
+        expect(gateway.opened, [
+          OpenedEvent(
             title: 'Physio',
             start: DateTime(2026, 9, 4, 10),
             end: DateTime(2026, 9, 4, 11),
+            location: 'Clinic',
+            notes: 'Booked with Recur - rcab123',
           ),
-          throwsA(isA<StateError>()),
-        );
+        ]);
       });
 
       test('throws ArgumentError when end is not after start', () {
         final t = DateTime(2026, 9, 4, 10);
         expect(
-          () => gateway.createEvent(
-            calendarId: 'cal-1',
-            title: 'Physio',
-            start: t,
-            end: t,
-          ),
-          throwsA(isA<ArgumentError>()),
-        );
-        expect(
-          () => gateway.createEvent(
-            calendarId: 'cal-1',
-            title: 'Physio',
-            start: t,
-            end: t.subtract(const Duration(minutes: 1)),
-          ),
-          throwsA(isA<ArgumentError>()),
+          () => gateway.openNewEvent(title: 'Physio', start: t, end: t),
+          throwsArgumentError,
         );
       });
 
-      test('throws ArgumentError when title is empty', () {
-        expect(
-          () => gateway.createEvent(
-            calendarId: 'cal-1',
-            title: '',
-            start: DateTime(2026, 9, 4, 10),
-            end: DateTime(2026, 9, 4, 11),
+      test('failNextOpenWith fails one call and then clears', () async {
+        gateway.failNextOpenWith = 'No calendar app.';
+        final start = DateTime(2026, 9, 4, 10);
+        final end = DateTime(2026, 9, 4, 11);
+
+        await expectLater(
+          gateway.openNewEvent(title: 'Physio', start: start, end: end),
+          throwsA(
+            isA<CalendarOpenException>().having(
+              (e) => e.message,
+              'message',
+              'No calendar app.',
+            ),
           ),
-          throwsA(isA<ArgumentError>()),
         );
+        expect(gateway.failNextOpenWith, isNull);
+        expect(gateway.opened, isEmpty);
+
+        await gateway.openNewEvent(title: 'Physio', start: start, end: end);
+        expect(gateway.opened, hasLength(1));
       });
 
-      test(
-        'appends a CreatedEvent with incrementing ids and returns it',
-        () async {
-          final start1 = DateTime(2026, 9, 4, 10);
-          final end1 = DateTime(2026, 9, 4, 11);
-          final id1 = await gateway.createEvent(
-            calendarId: 'cal-1',
-            title: 'Physio',
-            start: start1,
-            end: end1,
-            location: 'Clinic',
-            notes: 'Bring towel',
-          );
+      test('saveOpened adds the last opened event to events', () async {
+        await gateway.openNewEvent(
+          title: 'Physio',
+          start: DateTime(2026, 9, 4, 10),
+          end: DateTime(2026, 9, 4, 11),
+          notes: 'Booked with Recur - rcab123',
+        );
 
-          expect(id1, 'evt-1');
-          expect(gateway.created, [
-            CreatedEvent(
-              id: 'evt-1',
-              calendarId: 'cal-1',
-              title: 'Physio',
-              start: start1,
-              end: end1,
-              location: 'Clinic',
-              notes: 'Bring towel',
-            ),
-          ]);
+        final saved = gateway.saveOpened();
 
-          final start2 = DateTime(2026, 9, 5, 10);
-          final end2 = DateTime(2026, 9, 5, 11);
-          final id2 = await gateway.createEvent(
-            calendarId: 'cal-1',
-            title: 'Trainer',
-            start: start2,
-            end: end2,
-          );
-
-          expect(id2, 'evt-2');
-          expect(gateway.created, hasLength(2));
-        },
-      );
-
-      test(
-        'failNextCreateWith fires once with the message, then clears',
-        () async {
-          gateway.failNextCreateWith = 'no calendar access';
-
-          await expectLater(
-            gateway.createEvent(
-              calendarId: 'cal-1',
-              title: 'Physio',
-              start: DateTime(2026, 9, 4, 10),
-              end: DateTime(2026, 9, 4, 11),
-            ),
-            throwsA(
-              isA<CalendarWriteException>().having(
-                (e) => e.message,
-                'message',
-                'no calendar access',
-              ),
-            ),
-          );
-
-          expect(gateway.failNextCreateWith, isNull);
-          expect(gateway.created, isEmpty);
-
-          // The next call succeeds normally.
-          final id = await gateway.createEvent(
-            calendarId: 'cal-1',
-            title: 'Physio',
-            start: DateTime(2026, 9, 4, 10),
-            end: DateTime(2026, 9, 4, 11),
-          );
-
-          expect(id, 'evt-1');
-          expect(gateway.created, hasLength(1));
-        },
-      );
+        expect(gateway.events, [saved]);
+        expect(saved.title, 'Physio');
+        expect(saved.notes, 'Booked with Recur - rcab123');
+      });
     });
 
     group('listEvents', () {
-      test('returns seeded events and created ones, sorted by start', () async {
-        gateway.events.add(
+      test('returns seeded events sorted by start', () async {
+        gateway.events.addAll([
           CalendarEvent(
             id: 'seed-1',
             calendarId: 'cal-1',
@@ -428,13 +321,15 @@ void main() {
             end: DateTime(2026, 9, 4, 15),
             isAllDay: false,
           ),
-        );
-        await gateway.createEvent(
-          calendarId: 'cal-1',
-          title: 'PT session',
-          start: DateTime(2026, 9, 4, 10),
-          end: DateTime(2026, 9, 4, 11),
-        );
+          CalendarEvent(
+            id: 'seed-2',
+            calendarId: 'cal-1',
+            title: 'PT session',
+            start: DateTime(2026, 9, 4, 10),
+            end: DateTime(2026, 9, 4, 11),
+            isAllDay: false,
+          ),
+        ]);
 
         final events = await gateway.listEvents(
           from: DateTime(2026, 9, 4),
@@ -474,33 +369,6 @@ void main() {
           ),
           throwsStateError,
         );
-      });
-    });
-
-    group('existingEventIds', () {
-      test('keeps created ids and drops unknown ones', () async {
-        final id = await gateway.createEvent(
-          calendarId: 'cal-1',
-          title: 'PT session',
-          start: DateTime(2026, 9, 4, 10),
-          end: DateTime(2026, 9, 4, 11),
-        );
-
-        expect(await gateway.existingEventIds({id, 'gone'}), {id});
-      });
-
-      test('keeps ids seeded through knownEventIds', () async {
-        gateway.knownEventIds.add('evt-seeded');
-
-        expect(await gateway.existingEventIds({'evt-seeded', 'gone'}), {
-          'evt-seeded',
-        });
-      });
-
-      test('throws without access', () async {
-        gateway.access = CalendarAccess.denied;
-
-        expect(() => gateway.existingEventIds({'evt-1'}), throwsStateError);
       });
     });
   });

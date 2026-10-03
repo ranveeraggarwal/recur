@@ -95,6 +95,32 @@ void main() {
     });
   });
 
+  group('EventType code', () {
+    test('survives the round trip', () {
+      final eventType = _sample().copyWith(code: 'k3');
+      final decoded = EventType.fromJson(
+        jsonDecode(jsonEncode(eventType.toJson())) as Map<String, dynamic>,
+      );
+      expect(decoded.code, 'k3');
+      expect(decoded, eventType);
+    });
+
+    test('is left out of the JSON when the card has none', () {
+      expect(_sample().toJson().containsKey('code'), isFalse);
+    });
+
+    test('a malformed code reads back as null', () {
+      for (final bad in ['K3', 'abc', 'a', 7]) {
+        final json = _sample().toJson()..['code'] = bad;
+        expect(EventType.fromJson(json).code, isNull);
+      }
+    });
+
+    test('differs between cards that differ only in code', () {
+      expect(_sample().copyWith(code: 'aa'), isNot(_sample()));
+    });
+  });
+
   group('EventType round trip', () {
     test('jsonEncode/jsonDecode round trips to an equal instance', () {
       final eventType = _sample();
