@@ -64,7 +64,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   bool _loadStarted = false;
 
-  /// Set while a tap is working out its slot, so a second tap waits.
+  /// Busy times over the suggestion range, read on each load ahead of the
+  /// scan. A tap uses whatever is here and never waits for a read: a wrong
+  /// suggestion is fixed in the calendar app, a frozen tap is not.
+  List<BusyInterval> _busy = const [];
+
+  /// Set while the calendar app is being opened, so a double tap opens it
+  /// once.
   bool _opening = false;
 
   @override
@@ -147,6 +153,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _access = access;
         _error = null;
       });
+      // Asked for before the scan so it is not queued behind a year of
+      // events; the plugin answers one read at a time.
+      if (access == CalendarAccess.granted) {
+        unawaited(_loadBusy(generation));
+      }
       _startScan(cards);
     } catch (error) {
       if (!mounted || generation != _loadGeneration) {
@@ -155,6 +166,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _error = error;
       });
+    }
+  }
+
+  Future<void> _loadBusy(int generation) async {
+    final range = suggestionSearchRange(_deps!.clock.now());
+    try {
+      final busy = await _deps!.calendar.busyIntervals(
+        from: range.from,
+        to: range.to,
+      );
+      if (mounted && generation == _loadGeneration) {
+        _busy = busy;
+      }
+    } catch (_) {
+      // A suggestion that ignores busy times still beats no event.
     }
   }
 
@@ -222,6 +248,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final deps = _deps!;
     final messenger = ScaffoldMessenger.of(context);
     try {
+      // Everything up to opening the calendar app uses what Home already
+      // has in memory, so the tap answers at once even mid-scan.
       final now = deps.clock.now();
       final past = _historySource(card.code)?.historyFor(card.code).past;
       final window = suggestionWindowFor(
@@ -229,27 +257,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         occurrences: past ?? const [],
         now: now,
       );
-
-      var busy = const <BusyInterval>[];
-      if (_access == CalendarAccess.granted) {
-        final range = suggestionSearchRange(now);
-        try {
-          busy = await deps.calendar.busyIntervals(
-            from: range.from,
-            to: range.to,
-          );
-        } catch (_) {
-          // A suggestion that ignores busy times still beats no event.
-        }
-      }
       final slot = firstSuggestedSlot(
         eventType: card,
         window: window,
-        busy: busy,
+        busy: _access == CalendarAccess.granted ? _busy : const [],
         now: now,
       );
 
-      final cardCode = card.code ?? (await _withCodes([card])).single.code!;
+      // Load gives every card a code before it is drawn; this only guards
+      // against that changing, checking against every card.
+      final cardCode =
+          card.code ??
+          (await _withCodes(_cards!)).firstWhere((c) => c.id == card.id).code!;
       final marker = markerLine(
         cardCode: cardCode,
         occurrenceCode: randomCode(deps.random, occurrenceCodeLength),
