@@ -179,10 +179,20 @@ with an `InheritedWidget` called `AppScope`. Screens navigate with plain
 `Navigator.push`. Each screen has its own small controller (a
 `ChangeNotifier`). No state-management library, no router library.
 
-Tapping a card reads busy times for tomorrow through the next 14 days,
-takes the card's suggestion from the history scan as it stands (finished
-or not, so the tap never waits on it), picks the slot with
-`firstSuggestedSlot`, and asks the gateway to open the calendar app.
+Each Home load reads busy times for tomorrow through the next 14 days,
+asked for before the scan's first ring so it is not queued behind it: the
+plugin answers one read at a time. Tapping a card reads nothing. It takes
+those busy times and the card's suggestion from the history scan as they
+stand, finished or not, picks the slot with `firstSuggestedSlot`, and asks
+the gateway to open the calendar app. A suggestion made before a read
+comes back may be wrong, and the user fixes it in the calendar app; a tap
+that waits on the calendar would look frozen.
+
+`DeviceCalendarGateway` does its reads on a background isolate
+(`Isolate.run` with `BackgroundIsolateBinaryMessenger` and
+`DartPluginRegistrant.ensureInitialized()`), so decoding a year of events
+never stalls the UI isolate. If that fails it reads on the root isolate
+instead.
 The intent is `ACTION_INSERT` on `CalendarContract.Events.CONTENT_URI`
 with the begin and end time, title, location, and description (notes plus
 marker). Recur learns nothing back from it: the calendar app returns no
@@ -223,7 +233,8 @@ completes, so loading them in the test body hangs until it times out.
 | Deleting a card | Removes the card. Its events stay in the calendar, and its code is never given to another card. |
 | Marker | `Booked with Recur - rc` + 2-character card code + 3-character random occurrence code, `0-9a-z`, last line of the notes. Same full code on several events counts once, at the earliest. |
 | History | Rebuilt from the calendar on launch and on every return to the foreground, in rings of ±7 days, ±30 days, ±365 days. Nothing cached. A card settles once its latest past, next upcoming and three past occurrences are found; the scan stops when every card has settled. |
-| Suggested time | First highlighted slot from tomorrow through the next 14 days. None found: tomorrow at the start of the card's first window. Never today. |
+| Suggested time | First highlighted slot from tomorrow through the next 14 days. None found: tomorrow at the start of the card's first window. Never today. Uses whatever busy times and history Home has when tapped; a tap never waits on the calendar. |
+| Calendar reads | On a background isolate, falling back to the root isolate if that fails. Busy times are asked for before the history scan. |
 | Without calendar access | Home shows the access message above the cards. Cards show no line, and the suggested time uses the card's windows with no busy times. |
 | Changes made in the calendar app | Followed, not fought. The scan reads the event as it now is. |
 | Existing bookings | Not migrated. Bookings made before the marker existed carry no code, so cards start with no history. |

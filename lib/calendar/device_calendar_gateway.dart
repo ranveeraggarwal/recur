@@ -8,6 +8,9 @@
 /// M7)".
 library;
 
+import 'dart:isolate';
+import 'dart:ui' show DartPluginRegistrant, RootIsolateToken;
+
 import 'package:device_calendar_plus/device_calendar_plus.dart';
 import 'package:flutter/services.dart';
 
@@ -67,6 +70,35 @@ bool isBlockingEvent(Event event) {
       event.endDate.isAfter(event.startDate);
 }
 
+/// Reads every event overlapping `[from, to)` on a background isolate and
+/// maps it there with [map], so decoding a long range never stalls the UI
+/// isolate. Top-level so the closure sent to the isolate captures nothing
+/// but its arguments.
+Future<List<T>> _readInBackground<T>(
+  RootIsolateToken token,
+  DateTime from,
+  DateTime to,
+  List<T> Function(List<Event> events) map,
+) {
+  return Isolate.run(() async {
+    BackgroundIsolateBinaryMessenger.ensureInitialized(token);
+    // The Android implementation registers itself as a Dart plugin class,
+    // which only happens on the root isolate unless asked for here.
+    DartPluginRegistrant.ensureInitialized();
+    return map(await DeviceCalendar.instance.listEvents(from, to));
+  });
+}
+
+List<BusyInterval> _busyFrom(List<Event> events) {
+  return events.where(isBlockingEvent).map(busyIntervalFrom).toList()
+    ..sort((a, b) => a.start.compareTo(b.start));
+}
+
+List<CalendarEvent> _calendarEventsFrom(List<Event> events) {
+  return events.map(calendarEventFrom).toList()
+    ..sort((a, b) => a.start.compareTo(b.start));
+}
+
 /// The real [CalendarGateway], wrapping [DeviceCalendar.instance].
 class DeviceCalendarGateway implements CalendarGateway {
   DeviceCalendarGateway({DeviceCalendar? plugin})
@@ -99,23 +131,32 @@ class DeviceCalendarGateway implements CalendarGateway {
   Future<List<BusyInterval>> busyIntervals({
     required DateTime from,
     required DateTime to,
-  }) async {
-    final events = await _plugin.listEvents(from, to);
-    final intervals =
-        events.where(isBlockingEvent).map(busyIntervalFrom).toList()
-          ..sort((a, b) => a.start.compareTo(b.start));
-    return intervals;
-  }
+  }) => _read(from, to, _busyFrom);
 
   @override
   Future<List<CalendarEvent>> listEvents({
     required DateTime from,
     required DateTime to,
-  }) async {
-    final events = await _plugin.listEvents(from, to);
-    final mapped = events.map(calendarEventFrom).toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
-    return mapped;
+  }) => _read(from, to, _calendarEventsFrom);
+
+  /// Reads on a background isolate when it can, and on this one when it
+  /// cannot: under a test's injected plugin, without a root isolate token,
+  /// or if the background read itself fails, in which case the same read
+  /// here reports the real error.
+  Future<List<T>> _read<T>(
+    DateTime from,
+    DateTime to,
+    List<T> Function(List<Event> events) map,
+  ) async {
+    final token = RootIsolateToken.instance;
+    if (token != null && identical(_plugin, DeviceCalendar.instance)) {
+      try {
+        return await _readInBackground(token, from, to, map);
+      } catch (_) {
+        // Fall through to the root isolate.
+      }
+    }
+    return map(await _plugin.listEvents(from, to));
   }
 
   @override

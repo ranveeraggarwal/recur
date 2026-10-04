@@ -72,6 +72,17 @@ class _SlowCalendar extends FakeCalendarGateway {
     }
     return super.listEvents(from: from, to: to);
   }
+
+  @override
+  Future<List<BusyInterval>> busyIntervals({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    return super.busyIntervals(from: from, to: to);
+  }
 }
 
 /// A [LocalStore] whose reads only finish after [delay], so a test can pump
@@ -157,6 +168,31 @@ Future<void> _pumpHome(WidgetTester tester, TestDeps testDeps) async {
     ),
   );
   await tester.pumpAndSettle();
+}
+
+/// A [FakeCalendarGateway] that notes the order reads were asked for in.
+class _OrderCalendar extends FakeCalendarGateway {
+  _OrderCalendar(this.order);
+
+  final List<String> order;
+
+  @override
+  Future<List<CalendarEvent>> listEvents({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    order.add('events');
+    return super.listEvents(from: from, to: to);
+  }
+
+  @override
+  Future<List<BusyInterval>> busyIntervals({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    order.add('busy');
+    return super.busyIntervals(from: from, to: to);
+  }
 }
 
 void main() {
@@ -429,6 +465,74 @@ void main() {
         testDeps.calendar.opened.single.notes,
         matches(RegExp(r'^Booked with Recur - rcab[0-9a-z]{3}$')),
       );
+    });
+
+    testWidgets('opens at once mid-scan, without reading the calendar', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      final calendar = _SlowCalendar()..delay = const Duration(seconds: 5);
+      final deps = AppDependencies(
+        clock: testDeps.clock,
+        ids: testDeps.deps.ids,
+        random: testDeps.deps.random,
+        eventTypes: testDeps.deps.eventTypes,
+        calendar: calendar,
+        places: testDeps.places,
+      );
+      await deps.eventTypes.upsert(
+        _eventType(id: 'et-1', name: 'PT session', code: 'ab'),
+      );
+      await tester.pumpWidget(
+        AppScope(
+          deps: deps,
+          child: const MaterialApp(home: HomeScreen()),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      final busyReads = calendar.busyQueries.length;
+
+      await tester.tap(find.byType(EventCard));
+      await tester.pump();
+
+      // Nothing read has come back yet, so the suggestion is the card's
+      // own window, and the tap asked the calendar for nothing more.
+      expect(calendar.opened.single.start, DateTime(2026, 9, 8, 8));
+      expect(calendar.busyQueries, hasLength(busyReads));
+
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('busy times are read before the scan starts', (
+      WidgetTester tester,
+    ) async {
+      final testDeps = buildTestDeps();
+      final order = <String>[];
+      final calendar = _OrderCalendar(order);
+      final deps = AppDependencies(
+        clock: testDeps.clock,
+        ids: testDeps.deps.ids,
+        random: testDeps.deps.random,
+        eventTypes: testDeps.deps.eventTypes,
+        calendar: calendar,
+        places: testDeps.places,
+      );
+      await deps.eventTypes.upsert(
+        _eventType(id: 'et-1', name: 'PT session', code: 'ab'),
+      );
+
+      await tester.pumpWidget(
+        AppScope(
+          deps: deps,
+          child: const MaterialApp(home: HomeScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(order.first, 'busy');
+      expect(order.skip(1), everyElement('events'));
     });
 
     testWidgets('works without calendar access, ignoring busy times', (

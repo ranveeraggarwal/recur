@@ -94,6 +94,10 @@ that ends at 10:00 does not block a slot that starts at 10:00. If nothing
 fits in those two weeks, Recur suggests tomorrow at the start of the
 card's first window, and you sort it out in your calendar app.
 
+The tap never waits. If Recur is still reading your calendar, it suggests
+from what it knows so far. It is only a suggestion; your calendar app has
+the last word.
+
 ## Your calendar is the history
 
 Recur does not keep a list of what you booked. It reads it back from your
